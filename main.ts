@@ -1,27 +1,24 @@
 /**
- * 7TV Emotes for Obsidian - Fixed Auto-Suggest & Enhanced Settings
- * 
- * @version 1.4.0
+ * 7TV Emotes for Obsidian
+ * @version 1.0.1
  * @license MIT
  */
-import { 
-    App, Editor, EditorSuggest, EditorPosition, 
-    EditorSuggestContext, EditorSuggestTriggerInfo, 
-    Plugin, PluginSettingTab, Setting, Notice
+import {
+    App, Editor, EditorSuggest, EditorPosition,
+    EditorSuggestContext, EditorSuggestTriggerInfo,
+    FuzzySuggestModal, Plugin, PluginSettingTab, Setting,
+    Notice, FuzzyMatch
 } from 'obsidian';
 
 // =====================================================================
-// SECTION 1: ENHANCED SETTINGS INTERFACE AND DEFAULTS
+// SETTINGS INTERFACE AND DEFAULTS
 // =====================================================================
 
 /**
- * Defines the enhanced structure for the plugin's persistent settings.
- * 
- * @property twitchUserId - The numeric Twitch ID used to fetch a streamer's
- * 7TV emote set. Can be manually entered or populated from streamer selection.
- * @property selectedStreamerId - The internal identifier from the built-in
- * streamer list (e.g., "xqc"). Used to populate the twitchUserId automatically.
- * @property cacheStrategy - Controls how and when emote images are cached locally.
+ * Plugin settings structure persisted to Obsidian's configuration storage.
+ * @property twitchUserId - Numeric Twitch identifier for emote set retrieval
+ * @property selectedStreamerId - Internal key for built-in streamer mapping
+ * @property cacheStrategy - Determines emote image storage behavior
  */
 interface SevenTVSettings {
     twitchUserId: string;
@@ -30,25 +27,17 @@ interface SevenTVSettings {
 }
 
 /**
- * Default settings values for new plugin installations.
- * 
- * @note 'on-demand' is set as default for optimal balance of performance
- * and storage efficiency.
+ * Default configuration values applied during initial plugin installation.
  */
 const DEFAULT_SETTINGS: SevenTVSettings = {
     twitchUserId: '',
     selectedStreamerId: '',
-    cacheStrategy: 'on-demand'  // Default changed to 'on-demand' per requirement
+    cacheStrategy: 'on-demand'
 }
 
 /**
- * Database of popular streamers for easy selection.
- * Structure: [Display Name, Twitch Numeric ID, Internal Identifier]
- * 
- * To add more streamers:
- * 1. Find the streamer's numeric Twitch ID (not username)
- * 2. Add a new entry: ['Display Name', 'TwitchID', 'internal_key']
- * 3. internal_key should be lowercase and unique
+ * Curated list of popular streamers with Twitch IDs for immediate selection.
+ * Format: [Display Name, Twitch Numeric ID, Internal Identifier]
  */
 const BUILT_IN_STREAMERS: Array<[string, string, string]> = [
     ['xQc', '71092938', 'xqc'],
@@ -61,70 +50,69 @@ const BUILT_IN_STREAMERS: Array<[string, string, string]> = [
     ['Asmongold', '26490481', 'asmongold'],
     ['Ludwig', '50615467', 'ludwig'],
     ['HasanAbi', '15796662', 'hasanabi'],
-    // Add more streamers here following the same format
 ];
 
-// Create lookup maps for efficient access
+// Streamer lookup maps for O(1) access performance
 const STREAMER_DISPLAY_MAP = new Map(BUILT_IN_STREAMERS.map(([name, id, key]) => [key, name]));
 const STREAMER_ID_MAP = new Map(BUILT_IN_STREAMERS.map(([name, id, key]) => [key, id]));
 
 // =====================================================================
-// SECTION 2: ENHANCED MAIN PLUGIN CLASS
+// MAIN PLUGIN CLASS
 // =====================================================================
 
 export default class SevenTVPlugin extends Plugin {
     settings: SevenTVSettings;
     private emoteSuggest: EmoteSuggest;
-    private cacheDir: string = '_7tv-emotes-cache';
+    private readonly CACHE_DIR = '_7tv-emotes-cache';
     private activePreCachePromise: Promise<void> | null = null;
-    
+
     /**
-     * Returns the currently active Twitch ID for fetching emotes.
-     * Priority order: Manual Twitch ID > Selected built-in streamer.
-     * 
-     * @returns The active Twitch ID or null if none is configured
+     * Resolves active Twitch ID based on configuration priority.
+     * Manual Twitch ID takes precedence over built-in streamer selection.
+     * @returns Active Twitch ID string or null if no configuration present
      */
     getActiveTwitchId(): string | null {
-        // Manual ID takes precedence
         if (this.settings.twitchUserId.trim()) {
-            console.log(`[7TV] Using manual Twitch ID: ${this.settings.twitchUserId}`);
             return this.settings.twitchUserId.trim();
         }
-        
-        // Fall back to built-in streamer
         if (this.settings.selectedStreamerId) {
-            const builtInId = STREAMER_ID_MAP.get(this.settings.selectedStreamerId);
-            if (builtInId) {
-                console.log(`[7TV] Using built-in streamer: ${this.settings.selectedStreamerId} (ID: ${builtInId})`);
-                return builtInId;
-            }
+            return STREAMER_ID_MAP.get(this.settings.selectedStreamerId) || null;
         }
-        
-        console.log('[7TV] No active Twitch ID configured.');
         return null;
     }
 
+    /**
+     * Public accessor for cache directory path.
+     * @returns Path to emote cache directory within vault
+     */
+    getCacheDir(): string {
+        return this.CACHE_DIR;
+    }
+
+    /**
+     * Plugin lifecycle initialization method.
+     * Loads settings, injects CSS, initializes cache, and registers components.
+     */
     async onload() {
         await this.loadSettings();
-        console.log(`[7TV] Plugin loading with cache strategy: ${this.settings.cacheStrategy}`);
+        this.injectStyles();
         
-        // Initialize cache if needed
+        // Initialize cache based on selected strategy
         if (this.settings.cacheStrategy !== 'no-cache') {
             await this.initializeCache();
         }
         
-        // Initialize auto-complete engine
+        // Set up emote auto-completion
         this.emoteSuggest = new EmoteSuggest(this.app, this);
         this.registerEditorSuggest(this.emoteSuggest);
-        console.log('[7TV] Auto-complete engine registered');
-
-        // Fetch emotes if an ID is configured
+        
+        // Load emotes if a streamer is already configured
         const activeId = this.getActiveTwitchId();
         if (activeId) {
             await this.refreshEmotesForUser(activeId);
         }
-
-        // Add manual insertion command (fallback)
+        
+        // Register fallback command for manual emote insertion
         this.addCommand({
             id: 'insert-huh-emote-manual',
             name: 'Insert HUH emote (Manual Fallback)',
@@ -132,80 +120,115 @@ export default class SevenTVPlugin extends Plugin {
                 await this.insertEmoteByStrategy(editor, 'HUH', '01FFMS6Q4G0009CAK0J14692AY');
             }
         });
-
-        // Register enhanced settings tab
+        
+        // Register settings tab
         this.addSettingTab(new EnhancedSettingTab(this.app, this));
-        console.log('[7TV] Plugin loaded successfully.');
     }
 
-    // ======================
-    // AUTO-SUGGEST FIXES
-    // ======================
-
     /**
-     * Called when the plugin is disabled. Cleans up resources.
+     * Injects CSS styles into the document head for plugin UI components.
+     * Uses inline CSS to comply with Obsidian's Content Security Policy.
      */
-    onunload() {
-        console.log('[7TV] Plugin unloaded.');
+    private injectStyles(): void {
+        const styleEl = document.createElement('style');
+        styleEl.id = 'seven-tv-emotes-styles';
+        styleEl.textContent = `
+            /* Streamer suggestion modal styling */
+            .seven-tv-streamer-suggestion-container {
+                display: flex;
+                align-items: flex-start;
+                justify-content: space-between;
+                width: 100%;
+                padding: 10px 4px;
+                border-bottom: 1px solid var(--background-modifier-border);
+                min-height: 60px;
+            }
+            .seven-tv-streamer-suggestion-container:last-child {
+                border-bottom: none;
+            }
+            .seven-tv-streamer-info-section {
+                display: flex;
+                flex-direction: column;
+                flex: 1;
+            }
+            .seven-tv-streamer-suggestion-name {
+                font-weight: 600;
+                font-size: 14px;
+                color: var(--text-normal);
+                line-height: 1.4;
+                margin-bottom: 4px;
+            }
+            .seven-tv-streamer-suggestion-id {
+                font-size: 12px;
+                color: var(--text-muted);
+                opacity: 0.8;
+                line-height: 1.3;
+            }
+            .seven-tv-streamer-selected-indicator {
+                font-size: 0.8em;
+                color: var(--text-accent);
+                margin-left: auto;
+                padding-left: 10px;
+                white-space: nowrap;
+                align-self: center;
+            }
+            
+            /* Emote suggestion styling */
+            .seven-tv-suggestion-item {
+                display: flex;
+                align-items: center;
+                padding: 4px 8px;
+            }
+            .seven-tv-suggestion-img {
+                height: 1.5em !important;
+                vertical-align: middle !important;
+                margin-right: 0.5em !important;
+                border-radius: 3px !important;
+            }
+            .seven-tv-suggestion-text {
+                vertical-align: middle;
+                color: var(--text-muted);
+                font-family: var(--font-monospace);
+                font-size: 0.9em;
+            }
+        `;
+        document.head.appendChild(styleEl);
     }
 
-    // ======================
-    // ENHANCED CACHE SYSTEM
-    // ======================
-
     /**
-     * Centralized method to refresh emotes for a given Twitch ID.
-     * Applies the user's selected cache strategy automatically.
-     * 
-     * @param twitchId - The Twitch numeric ID to fetch emotes for
+     * Fetches and caches emotes for a given Twitch user ID.
+     * Updates the emote suggester and applies the configured cache strategy.
+     * @param twitchId - Numeric Twitch user identifier
      */
     async refreshEmotesForUser(twitchId: string): Promise<void> {
-        console.log(`[7TV] Fetching emotes for Twitch ID: ${twitchId}`);
         const newEmoteMap = await fetchEmotesForTwitchId(twitchId);
-
         if (newEmoteMap.size > 0) {
             this.emoteSuggest.updateEmoteMap(newEmoteMap);
-            console.log(`[7TV] Loaded ${newEmoteMap.size} emotes. Cache strategy: ${this.settings.cacheStrategy}`);
             
-            // Apply the selected cache strategy
+            // Execute pre-caching if strategy is set to pre-cache
             switch (this.settings.cacheStrategy) {
                 case 'pre-cache':
                     this.activePreCachePromise = this.preCacheEmoteSet(newEmoteMap);
-                    this.activePreCachePromise
-                        .then(() => console.log('[7TV] Pre-cache completed successfully.'))
-                        .catch(err => console.warn('[7TV] Pre-cache encountered errors:', err))
-                        .finally(() => { this.activePreCachePromise = null; });
-                    break;
-                    
-                case 'on-demand':
-                    console.log('[7TV] On-demand caching enabled. Emotes will cache when first used.');
-                    break;
-                    
-                case 'no-cache':
-                    console.log('[7TV] Caching disabled. All emotes will load from 7TV CDN.');
+                    this.activePreCachePromise.finally(() => { this.activePreCachePromise = null; });
                     break;
             }
         }
     }
 
     /**
-     * Main emote insertion method that respects the active cache strategy.
-     * Routes to the appropriate insertion method based on cacheStrategy setting.
-     * 
-     * @param editor - The active editor instance
-     * @param name - Display name of the emote (e.g., 'HUH')
-     * @param id - 7TV emote ID
+     * Routes emote insertion to the appropriate method based on cache strategy.
+     * @param editor - Active Obsidian editor instance
+     * @param name - Emote display name
+     * @param id - 7TV emote identifier
      */
     async insertEmoteByStrategy(editor: Editor, name: string, id: string): Promise<void> {
         switch (this.settings.cacheStrategy) {
             case 'no-cache':
                 await this.insertWithoutCache(editor, name, id);
                 break;
-                
             case 'on-demand':
                 await this.insertWithOnDemandCache(editor, name, id);
                 break;
-                
             case 'pre-cache':
             default:
                 await this.insertWithPreCache(editor, name, id);
@@ -214,162 +237,120 @@ export default class SevenTVPlugin extends Plugin {
     }
 
     /**
-     * Strategy: No Cache - Always use CDN URLs directly.
-     * Provides fastest initial load but no offline support.
-     * 
-     * @param editor - The active editor instance
-     * @param name - Display name of the emote
-     * @param id - 7TV emote ID
+     * Inserts emote using direct CDN URL without local caching.
+     * @param editor - Active Obsidian editor instance
+     * @param name - Emote display name
+     * @param id - 7TV emote identifier
      */
     private async insertWithoutCache(editor: Editor, name: string, id: string): Promise<void> {
-        const html = `<span class="seven-tv-emote" title=":${name}:"> <img src="https://cdn.7tv.app/emote/${id}/1x.webp" alt="${name}" style="display: inline-block; height: 1.5em; vertical-align: middle;"> </span>`;
+        const html = `<span class="seven-tv-emote" title=":${name}:"><img src="https://cdn.7tv.app/emote/${id}/1x.webp" alt="${name}" style="display:inline-block;height:1.5em;vertical-align:middle;"></span>`;
         editor.replaceSelection(html);
-        console.log(`[7TV] Inserted (no-cache): :${name}: from CDN`);
     }
 
     /**
-     * Strategy: On-Demand Cache - Lazy loading with background caching.
-     * Default strategy that balances performance and storage efficiency.
-     * 
-     * @param editor - The active editor instance
-     * @param name - Display name of the emote
-     * @param id - 7TV emote ID
+     * Inserts emote using local cache if available, otherwise uses CDN with background caching.
+     * @param editor - Active Obsidian editor instance
+     * @param name - Emote display name
+     * @param id - 7TV emote identifier
      */
     private async insertWithOnDemandCache(editor: Editor, name: string, id: string): Promise<void> {
-        const cachePath = `${this.cacheDir}/${id}.webp`;
+        const cachePath = `${this.CACHE_DIR}/${id}.webp`;
         const cdnUrl = `https://cdn.7tv.app/emote/${id}/1x.webp`;
         
-        // Check if already cached
         if (await this.app.vault.adapter.exists(cachePath)) {
-            const html = `<span class="seven-tv-emote" title=":${name}:"> <img src="./${cachePath}" alt="${name}" style="display: inline-block; height: 1.5em; vertical-align: middle;"> </span>`;
+            const html = `<span class="seven-tv-emote" title=":${name}:"><img src="./${cachePath}" alt="${name}" style="display:inline-block;height:1.5em;vertical-align:middle;"></span>`;
             editor.replaceSelection(html);
-            console.log(`[7TV] Inserted (on-demand cache): :${name}: from local cache`);
         } else {
-            // Use CDN first for immediate feedback, then cache in background
-            const html = `<span class="seven-tv-emote" title=":${name}:"> <img src="${cdnUrl}" alt="${name}" style="display: inline-block; height: 1.5em; vertical-align: middle;"> </span>`;
+            const html = `<span class="seven-tv-emote" title=":${name}:"><img src="${cdnUrl}" alt="${name}" style="display:inline-block;height:1.5em;vertical-align:middle;"></span>`;
             editor.replaceSelection(html);
-            console.log(`[7TV] Inserted (on-demand cache): :${name}: from CDN, caching in background`);
-            
-            // Cache in background for next time (fire-and-forget)
-            this.downloadToCache(id, cdnUrl, cachePath).catch(err => 
-                console.debug(`[7TV] Background cache failed for ${name}:`, err)
-            );
+            // Cache in background for future use
+            this.downloadToCache(id, cdnUrl, cachePath).catch(() => { });
         }
     }
 
     /**
-     * Strategy: Pre-Cache - Assumes emotes are already cached.
-     * Provides instant loading and full offline support after initial cache.
-     * 
-     * @param editor - The active editor instance
-     * @param name - Display name of the emote
-     * @param id - 7TV emote ID
+     * Inserts emote using local cache, with CDN fallback for cache misses.
+     * @param editor - Active Obsidian editor instance
+     * @param name - Emote display name
+     * @param id - 7TV emote identifier
      */
     private async insertWithPreCache(editor: Editor, name: string, id: string): Promise<void> {
-        const cachePath = `${this.cacheDir}/${id}.webp`;
+        const cachePath = `${this.CACHE_DIR}/${id}.webp`;
         const cdnUrl = `https://cdn.7tv.app/emote/${id}/1x.webp`;
         
         if (await this.app.vault.adapter.exists(cachePath)) {
-            const html = `<span class="seven-tv-emote" title=":${name}:"> <img src="./${cachePath}" alt="${name}" style="display: inline-block; height: 1.5em; vertical-align: middle;"> </span>`;
+            const html = `<span class="seven-tv-emote" title=":${name}:"><img src="./${cachePath}" alt="${name}" style="display:inline-block;height:1.5em;vertical-align:middle;"></span>`;
             editor.replaceSelection(html);
-            console.log(`[7TV] Inserted (pre-cache): :${name}: from local cache`);
         } else {
-            // Fallback to CDN if somehow not cached (should be rare with pre-cache)
-            console.warn(`[7TV] Pre-cache miss for ${name}, using CDN fallback`);
-            const html = `<span class="seven-tv-emote" title=":${name}:"> <img src="${cdnUrl}" alt="${name}" style="display: inline-block; height: 1.5em; vertical-align: middle;"> </span>`;
+            const html = `<span class="seven-tv-emote" title=":${name}:"><img src="${cdnUrl}" alt="${name}" style="display:inline-block;height:1.5em;vertical-align:middle;"></span>`;
             editor.replaceSelection(html);
-            
-            // Try to cache it now for next time
-            this.downloadToCache(id, cdnUrl, cachePath).catch(err => 
-                console.debug(`[7TV] Cache fallback failed for ${name}:`, err)
-            );
+            this.downloadToCache(id, cdnUrl, cachePath).catch(() => { });
         }
     }
 
-    // ======================
-    // CACHE INFRASTRUCTURE (Shared)
-    // ======================
-
     /**
-     * Initializes the cache directory in the vault.
-     * Only creates directory if caching is enabled in settings.
+     * Creates cache directory in vault if it doesn't exist.
      */
     private async initializeCache(): Promise<void> {
         try {
-            const exists = await this.app.vault.adapter.exists(this.cacheDir);
-            if (!exists) {
-                await this.app.vault.createFolder(this.cacheDir);
-                console.log(`[7TV] Cache directory created: ${this.cacheDir}`);
+            if (!(await this.app.vault.adapter.exists(this.CACHE_DIR))) {
+                await this.app.vault.createFolder(this.CACHE_DIR);
             }
         } catch (error) {
             console.error('[7TV] Cache initialization error:', error);
         }
     }
 
-	public async ensureCacheInitialized(): Promise<void> {
-		if (this.settings.cacheStrategy !== 'no-cache') {
-			await this.initializeCache();
-		}
-	}
-
-	public hasLoadedEmotes(): boolean {
-		return this.emoteSuggest !== undefined && this.emoteSuggest.getEmoteCount() > 1; // >1 because HUH is always there
-	}
+    /**
+     * Public method to ensure cache is initialized when needed.
+     */
+    public async ensureCacheInitialized(): Promise<void> {
+        if (this.settings.cacheStrategy !== 'no-cache') {
+            await this.initializeCache();
+        }
+    }
 
     /**
-     * Pre-caches an entire emote set for the pre-cache strategy.
-     * Downloads emotes in small batches to avoid overwhelming network/file system.
-     * 
-     * @param emoteMap - The full map of emote names to IDs to cache
+     * Checks if emotes beyond the default HUH emote have been loaded.
+     * @returns Boolean indicating if additional emotes are loaded
+     */
+    public hasLoadedEmotes(): boolean {
+        return this.emoteSuggest !== undefined && this.emoteSuggest.getEmoteCount() > 1;
+    }
+
+    /**
+     * Pre-caches all emotes in a set using batched downloads.
+     * @param emoteMap - Map of emote names to 7TV IDs
      */
     private async preCacheEmoteSet(emoteMap: Map<string, string>): Promise<void> {
         const emoteIds = Array.from(emoteMap.values());
-        console.log(`[7TV] Starting pre-cache of ${emoteIds.length} emotes...`);
-        
         const BATCH_SIZE = 5;
-        let successCount = 0;
         
         for (let i = 0; i < emoteIds.length; i += BATCH_SIZE) {
             const batch = emoteIds.slice(i, i + BATCH_SIZE);
             const promises = batch.map(id => this.ensureEmoteCached(id));
-            const results = await Promise.allSettled(promises);
-            
-            successCount += results.filter(r => r.status === 'fulfilled').length;
-            
-            // Progress reporting for large sets
-            if (emoteIds.length > 30 && i % 30 === 0) {
-                console.log(`[7TV] Pre-cache progress: ${successCount}/${emoteIds.length}`);
-            }
-            
-            // Small delay between batches to be network-friendly
+            await Promise.allSettled(promises);
             await new Promise(resolve => setTimeout(resolve, 30));
         }
-        
-        console.log(`[7TV] Pre-cache finished. ${successCount}/${emoteIds.length} emotes cached.`);
     }
 
     /**
      * Ensures a specific emote is cached locally.
-     * Skips download if already cached.
-     * 
-     * @param emoteId - The 7TV emote ID to cache
+     * @param emoteId - 7TV emote identifier
      */
     private async ensureEmoteCached(emoteId: string): Promise<void> {
-        const cachePath = `${this.cacheDir}/${emoteId}.webp`;
-        if (await this.app.vault.adapter.exists(cachePath)) {
-            return; // Already cached
-        }
+        const cachePath = `${this.CACHE_DIR}/${emoteId}.webp`;
+        if (await this.app.vault.adapter.exists(cachePath)) return;
         
         const cdnUrl = `https://cdn.7tv.app/emote/${emoteId}/1x.webp`;
         await this.downloadToCache(emoteId, cdnUrl, cachePath);
     }
 
     /**
-     * Downloads an emote from 7TV CDN and saves it to the local cache.
-     * 
-     * @param emoteId - The 7TV emote ID (for logging)
-     * @param sourceUrl - The CDN URL to download from
-     * @param destPath - The local path to save the file to
+     * Downloads emote from 7TV CDN and saves to local cache.
+     * @param emoteId - 7TV emote identifier for logging
+     * @param sourceUrl - CDN source URL
+     * @param destPath - Local destination path
      */
     private async downloadToCache(emoteId: string, sourceUrl: string, destPath: string): Promise<void> {
         try {
@@ -378,7 +359,6 @@ export default class SevenTVPlugin extends Plugin {
             
             const arrayBuffer = await response.arrayBuffer();
             await this.app.vault.adapter.writeBinary(destPath, arrayBuffer);
-            console.log(`[7TV] Cached emote: ${emoteId} (${arrayBuffer.byteLength} bytes)`);
         } catch (error) {
             console.debug(`[7TV] Cache download failed for ${emoteId}:`, error);
             throw error;
@@ -386,115 +366,60 @@ export default class SevenTVPlugin extends Plugin {
     }
 
     /**
-     * Loads plugin settings from persistent storage.
+     * Loads plugin settings from Obsidian's persistent storage.
      */
     async loadSettings() {
         this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-        console.log('[7TV] Settings loaded.');
     }
 
     /**
-     * Saves plugin settings to persistent storage.
+     * Saves plugin settings to Obsidian's persistent storage.
      */
     async saveSettings() {
         await this.saveData(this.settings);
-        console.log('[7TV] Settings saved.');
     }
 }
 
 // =====================================================================
-// SECTION 3: FIXED AUTO-COMPLETE ENGINE (EditorSuggest)
+// EMOTE AUTO-COMPLETE ENGINE
 // =====================================================================
 
 /**
- * The auto-complete engine that provides emote suggestions as users type.
- * 
- * Key features:
- * - Triggers on colon (:) character
- * - Shows emote images and names in suggestions
- * - Enhanced to trigger on both partial and complete emote codes
- * - Handles emote insertion with caching support
+ * Provides emote suggestions in the editor triggered by colon character.
+ * Integrates with Obsidian's EditorSuggest API for seamless auto-completion.
  */
 class EmoteSuggest extends EditorSuggest<string> {
-    /** Map of emote names to their 7TV IDs */
     private emoteMap: Map<string, string> = new Map([['HUH', '01FFMS6Q4G0009CAK0J14692AY']]);
-    
-    /** Reference to main plugin for cache access */
     private plugin: SevenTVPlugin;
 
-    /**
-     * Creates a new EmoteSuggest instance.
-     * 
-     * @param app - The Obsidian App instance
-     * @param plugin - Reference to main plugin for cache access
-     */
     constructor(app: App, plugin: SevenTVPlugin) {
         super(app);
         this.plugin = plugin;
-        console.log('[7TV] EmoteSuggest engine initialized.');
     }
-
-    // ======================
-    // EMOTE MAP MANAGEMENT
-    // ======================
 
     /**
      * Updates the internal emote map with new data.
-     * 
-     * @param newMap - The new map of emote names to IDs
+     * @param newMap - Updated map of emote names to 7TV IDs
      */
     updateEmoteMap(newMap: Map<string, string>): void {
         this.emoteMap = new Map(newMap);
-        console.log(`[7TV] Suggester updated with ${this.emoteMap.size} emotes.`);
     }
 
     /**
-     * Retrieves the 7TV ID for a given emote name.
-     * 
-     * @param emoteName - The name of the emote (e.g., 'HUH')
-     * @returns The 7TV ID if found, undefined otherwise
-     */
-    getEmoteId(emoteName: string): string | undefined {
-        return this.emoteMap.get(emoteName);
-    }
-
-    // ======================
-    // EDITORSUGGEST IMPLEMENTATION - FIXED
-    // ======================
-
-    /**
-     * Determines when to trigger the suggestion popup.
-     * 
-     * FIXED REGEX: Now properly detects patterns like ":emote" and ":emote:"
-     * The regex /:([a-zA-Z0-9_]+):?$/ matches:
-     * - Colon followed by alphanumeric/underscore characters
-     * - Optional trailing colon
-     * - At the end of the current text (cursor position)
-     * 
-     * @param cursor - Current cursor position in the editor
-     * @param editor - The active editor instance
+     * Determines when to trigger suggestion popup based on typed text.
+     * @param cursor - Current cursor position in editor
+     * @param editor - Active editor instance
      * @returns Trigger information or null if no trigger detected
      */
     onTrigger(cursor: EditorPosition, editor: Editor): EditorSuggestTriggerInfo | null {
         const line = editor.getLine(cursor.line);
         const sub = line.substring(0, cursor.ch);
-        
-        // FIXED: Use regex that properly matches ":emote" and ":emote:"
         const match = sub.match(/:([a-zA-Z0-9_]+):?$/);
         
         if (match) {
-            // match[0] is the full match (e.g., ":HUH" or ":HUH:")
-            // match[1] is the captured group (the emote name without colons)
             const fullMatch = match[0];
-            const query = match[1]; // The emote name without colons
-            
-            // Calculate start position (location of the first colon)
+            const query = match[1];
             const startPos = cursor.ch - fullMatch.length;
-            
-            // Check if we have a trailing colon
-            const hasTrailingColon = fullMatch.endsWith(':');
-            
-            console.log(`[7TV] Trigger detected: query="${query}", fullMatch="${fullMatch}", hasTrailingColon=${hasTrailingColon}`);
             
             return {
                 start: { line: cursor.line, ch: Math.max(0, startPos) },
@@ -502,43 +427,31 @@ class EmoteSuggest extends EditorSuggest<string> {
                 query: query
             };
         }
-        
         return null;
     }
 
     /**
-     * Generates the list of suggestions based on the user's query.
-     * 
-     * @param context - The suggestion context containing the user's query
-     * @returns Array of emote names that match the query
+     * Generates suggestions based on current query.
+     * @param context - Suggestion context containing query text
+     * @returns Array of emote names matching the query
      */
     getSuggestions(context: EditorSuggestContext): string[] {
         const query = context.query.toLowerCase();
-        const suggestions = Array.from(this.emoteMap.keys())
+        return Array.from(this.emoteMap.keys())
             .filter(name => name.toLowerCase().includes(query))
-            .slice(0, 25); // Limit to 25 suggestions for performance
-        
-        console.log(`[7TV] Generated ${suggestions.length} suggestions for query: "${query}"`);
-        return suggestions;
+            .slice(0, 25);
     }
 
     /**
-     * Renders a single suggestion in the popup list.
-     * 
-     * Displays both the emote image and its code for easy identification.
-     * 
-     * @param value - The emote name being rendered
-     * @param el - The HTML element to render the suggestion into
+     * Renders individual suggestion with emote image and name.
+     * @param value - Emote name to render
+     * @param el - HTML element to populate with suggestion content
      */
     renderSuggestion(value: string, el: HTMLElement): void {
-        // Clear any existing content
         el.empty();
-
-        // Create container for the suggestion
         const container = el.createDiv();
         container.addClass('seven-tv-suggestion-item');
         
-        // Get the emote ID and create image if available
         const emoteId = this.emoteMap.get(value);
         if (emoteId) {
             const imgUrl = `https://cdn.7tv.app/emote/${emoteId}/1x.webp`;
@@ -547,76 +460,57 @@ class EmoteSuggest extends EditorSuggest<string> {
             imgEl.setAttribute('alt', value);
             imgEl.addClass('seven-tv-suggestion-img');
             imgEl.setAttribute('data-emote-name', value);
-            
-            // Style the image for consistent display
-            imgEl.style.height = '1.5em';
-            imgEl.style.verticalAlign = 'middle';
-            imgEl.style.marginRight = '0.5em';
-            imgEl.style.borderRadius = '3px';
         }
         
-        // Add the emote code as text
         const textSpan = container.createEl('span');
         textSpan.setText(`:${value}:`);
         textSpan.addClass('seven-tv-suggestion-text');
-        textSpan.style.verticalAlign = 'middle';
-        textSpan.style.color = 'var(--text-muted)';
-        textSpan.style.fontFamily = 'var(--font-monospace)';
-        textSpan.style.fontSize = '0.9em';
-        
-        console.log(`[7TV] Rendered suggestion for: :${value}:`);
     }
 
     /**
-     * Handles the selection of a suggestion from the popup.
-     * 
-     * Replaces the typed text with the cached emote HTML.
-     * Uses the plugin's strategy-based insertion method.
-     * 
-     * @param value - The selected emote name
-     * @param evt - The mouse or keyboard event that triggered the selection
+     * Handles suggestion selection and inserts emote into editor.
+     * @param value - Selected emote name
+     * @param evt - Mouse or keyboard event that triggered selection
      */
     selectSuggestion(value: string, evt: MouseEvent | KeyboardEvent): void {
-        if (!this.context || !this.context.editor) {
-            console.error('[7TV] Cannot select suggestion: missing context or editor');
-            return;
-        }
-
+        if (!this.context || !this.context.editor) return;
+        
         const editor = this.context.editor;
         const emoteId = this.emoteMap.get(value);
-
-        if (!emoteId) {
-            console.error(`[7TV] Cannot find ID for emote: ${value}`);
-            return;
-        }
-
-        // Get the text that was actually typed
+        if (!emoteId) return;
+        
         const typedRange = editor.getRange(this.context.start, this.context.end);
         const hasTrailingColon = typedRange.endsWith(':');
-        
-        // Adjust end position to delete trailing colon if present
         let deleteEnd = this.context.end;
+        
         if (hasTrailingColon && this.context.end.ch > this.context.start.ch) {
             deleteEnd = { ...this.context.end };
         }
-
-        // Delete the typed text (e.g., ":HUH" or ":HUH:")
-        editor.replaceRange('', this.context.start, deleteEnd);
         
-        // Use plugin's strategy-based insertion method
+        editor.replaceRange('', this.context.start, deleteEnd);
         this.plugin.insertEmoteByStrategy(editor, value, emoteId);
     }
-	getEmoteCount(): number {
-		return this.emoteMap.size;
-	}
+
+    /**
+     * Returns count of loaded emotes.
+     * @returns Number of emotes in the current map
+     */
+    getEmoteCount(): number {
+        return this.emoteMap.size;
+    }
 }
 
 // =====================================================================
-// SECTION 4: ENHANCED SETTINGS TAB WITH FIXED STREAMER SELECTION
+// SIMPLIFIED SETTINGS TAB WITH TWO-LINE DROPDOWN
 // =====================================================================
 
+/**
+ * Simplified settings tab providing essential configuration options.
+ * Focuses on core functionality with minimal UI complexity.
+ */
 class EnhancedSettingTab extends PluginSettingTab {
     plugin: SevenTVPlugin;
+    private debounceTimer: NodeJS.Timeout | null = null;
 
     constructor(app: App, plugin: SevenTVPlugin) {
         super(app, plugin);
@@ -624,179 +518,247 @@ class EnhancedSettingTab extends PluginSettingTab {
     }
 
     /**
-     * Renders the settings tab interface with enhanced streamer selection.
-     * Built-in streamer selection now populates the manual Twitch ID field.
+     * Renders the simplified settings tab interface.
      */
     display(): void {
         const { containerEl } = this;
         containerEl.empty();
-        containerEl.createEl('h2', { text: '7TV Emotes - Settings' });
+        containerEl.createEl('h2', { text: '7TV Emotes' });
         
-        // Cache Strategy Selection
+        // Cache strategy dropdown (simplified)
         new Setting(containerEl)
             .setName('Cache Strategy')
-            .setDesc('Controls how and when emote images are stored locally.')
+            .setDesc('How emote images are stored')
             .addDropdown(dropdown => dropdown
-                .addOption('pre-cache', 'Pre-cache All (Offline Ready)')
-                .addOption('on-demand', 'Cache On-Demand (Recommended)')
-                .addOption('no-cache', 'No Cache (CDN Only)')
+                .addOption('on-demand', 'On-Demand')
+                .addOption('pre-cache', 'Pre-cache All')
+                .addOption('no-cache', 'No Cache')
                 .setValue(this.plugin.settings.cacheStrategy)
                 .onChange(async (value: any) => {
                     this.plugin.settings.cacheStrategy = value;
                     await this.plugin.saveSettings();
-                    console.log(`[7TV] Cache strategy changed to: ${value}`);
-                    
-                    // Re-initialize cache if needed
-                    if (value !== 'no-cache') {
-                        await this.plugin.ensureCacheInitialized();
-                    }
+                    await this.plugin.ensureCacheInitialized();
                 }));
+
+        // Streamer selection with search modal
+        const streamerSetting = new Setting(containerEl)
+            .setName('Streamer')
+            .setDesc('Select a streamer or enter Twitch ID');
         
-        // Built-in Streamer Selection (Searchable Dropdown)
-        new Setting(containerEl)
-            .setName('Select Streamer')
-            .setDesc('Choose from popular streamers. This will populate the Twitch ID field.')
-            .addDropdown(dropdown => {
-                // Add blank option
-                dropdown.addOption('', '-- Select a Streamer --');
+        const buttonContainer = streamerSetting.controlEl.createDiv();
+        buttonContainer.style.display = 'flex';
+        buttonContainer.style.gap = '8px';
+        buttonContainer.style.alignItems = 'center';
+        
+        // Search button
+        const button = buttonContainer.createEl('button');
+        button.addClass('mod-cta');
+        button.style.flex = '1';
+        button.style.textAlign = 'left';
+        button.style.overflow = 'hidden';
+        button.style.textOverflow = 'ellipsis';
+        button.style.whiteSpace = 'nowrap';
+        
+        const updateButtonText = () => {
+            const currentKey = this.plugin.settings.selectedStreamerId;
+            button.textContent = currentKey
+                ? STREAMER_DISPLAY_MAP.get(currentKey) || currentKey
+                : 'Select streamer...';
+        };
+        
+        updateButtonText();
+        
+        button.addEventListener('click', () => {
+            new StreamerSuggestModal(this.app, this.plugin, async (selectedKey) => {
+                const displayName = STREAMER_DISPLAY_MAP.get(selectedKey);
+                const twitchId = STREAMER_ID_MAP.get(selectedKey);
                 
-                // Sort streamers alphabetically by display name
-                const sortedStreamers = [...BUILT_IN_STREAMERS]
-                    .sort((a, b) => a[0].localeCompare(b[0]));
+                if (!twitchId) {
+                    new Notice('Invalid streamer selection');
+                    return;
+                }
                 
-                // Add all streamers
-                sortedStreamers.forEach(([displayName, _, key]) => {
-                    dropdown.addOption(key, displayName);
-                });
+                this.plugin.settings.selectedStreamerId = selectedKey;
+                this.plugin.settings.twitchUserId = twitchId;
+                await this.plugin.saveSettings();
                 
-                dropdown.setValue(this.plugin.settings.selectedStreamerId)
-                    .onChange(async (value) => {
-                        this.plugin.settings.selectedStreamerId = value;
-                        
-                        // FIXED: Populate the manual Twitch ID field with the selected streamer's ID
-                        if (value) {
-                            const twitchId = STREAMER_ID_MAP.get(value);
-                            if (twitchId) {
-                                this.plugin.settings.twitchUserId = twitchId;
-                                // Force the manual ID field to update visually
-                                const manualInput = containerEl.querySelector('input[placeholder*="Twitch ID"]') as HTMLInputElement;
-                                if (manualInput) {
-                                    manualInput.value = twitchId;
-                                }
-                            }
-                        } else {
-                            // Clear both if no streamer selected
-                            this.plugin.settings.twitchUserId = '';
-                        }
-                        
-                        await this.plugin.saveSettings();
-                        
-                        // Refresh emotes if a streamer was selected
-                        if (value) {
-                            const streamerName = STREAMER_DISPLAY_MAP.get(value) || value;
-                            new Notice(`Fetching 7TV emotes for ${streamerName}...`);
-                            const twitchId = STREAMER_ID_MAP.get(value);
-                            if (twitchId) {
-                                this.plugin.refreshEmotesForUser(twitchId)
-                                    .then(() => new Notice(`Loaded ${streamerName}'s emotes!`))
-                                    .catch(err => {
-                                        console.error('[7TV] Failed to load emotes:', err);
-                                        new Notice(`Failed to load ${streamerName}'s emotes. Check console.`);
-                                    });
-                            }
-                        }
-                    });
+                updateButtonText();
+                manualInput.value = twitchId;
+                
+                // Fetch emotes with a slight delay for better UX
+                setTimeout(() => {
+                    this.plugin.refreshEmotesForUser(twitchId)
+                        .then(() => new Notice(`${displayName}'s emotes loaded`))
+                        .catch(() => new Notice('Failed to load emotes'));
+                }, 100);
+            }).open();
+        });
+        
+        // Manual Twitch ID input with debouncing
+        const manualInput = buttonContainer.createEl('input');
+        manualInput.type = 'text';
+        manualInput.placeholder = 'Twitch ID';
+        manualInput.value = this.plugin.settings.twitchUserId;
+        manualInput.style.flex = '1';
+        
+        manualInput.addEventListener('input', () => {
+            if (this.debounceTimer) clearTimeout(this.debounceTimer);
+            
+            this.debounceTimer = setTimeout(async () => {
+                const value = manualInput.value.trim();
+                this.plugin.settings.twitchUserId = value;
+                
+                if (value && this.plugin.settings.selectedStreamerId) {
+                    this.plugin.settings.selectedStreamerId = '';
+                    updateButtonText();
+                }
+                
+                await this.plugin.saveSettings();
+                
+                if (/^\d{6,}$/.test(value)) {
+                    setTimeout(() => {
+                        this.plugin.refreshEmotesForUser(value)
+                            .then(() => new Notice('Emotes loaded'))
+                            .catch(() => new Notice('Failed to load emotes'));
+                    }, 200);
+                }
+            }, 500);
+        });
+        
+        // Clear button (only shown when there's a selection)
+        if (this.plugin.settings.selectedStreamerId || this.plugin.settings.twitchUserId) {
+            const clearButton = streamerSetting.controlEl.createEl('button');
+            clearButton.textContent = 'Clear';
+            clearButton.style.marginLeft = '8px';
+            clearButton.addEventListener('click', async () => {
+                this.plugin.settings.selectedStreamerId = '';
+                this.plugin.settings.twitchUserId = '';
+                await this.plugin.saveSettings();
+                updateButtonText();
+                manualInput.value = '';
+                new Notice('Selection cleared');
             });
+        }
         
-        // Manual Twitch ID Input
-        const manualSetting = new Setting(containerEl)
-            .setName('Twitch User ID')
-            .setDesc('The numeric Twitch ID. Can be entered manually or populated by selecting a streamer above.')
-            .addText(text => text
-                .setPlaceholder('e.g., 71092938')
-                .setValue(this.plugin.settings.twitchUserId)
-                .onChange(async (value) => {
-                    this.plugin.settings.twitchUserId = value;
-                    
-                    // Clear streamer selection if manual ID is entered
-                    if (value.trim() && this.plugin.settings.selectedStreamerId) {
-                        this.plugin.settings.selectedStreamerId = '';
-                        // Force the streamer dropdown to update visually
-                        const streamerDropdown = containerEl.querySelector('select') as HTMLSelectElement;
-                        if (streamerDropdown) {
-                            streamerDropdown.value = '';
-                        }
-                    }
-                    
-                    await this.plugin.saveSettings();
-                    
-                    // Auto-fetch if ID looks valid
-                    if (/^\d+$/.test(value.trim()) && value.trim().length > 5) {
-                        new Notice('Fetching 7TV emotes...');
-                        this.plugin.refreshEmotesForUser(value.trim())
-                            .then(() => new Notice('Emotes loaded successfully!'))
-                            .catch(err => {
-                                console.error('[7TV] Failed to load emotes:', err);
-                                new Notice('Failed to load emotes. Check console.');
-                            });
-                    }
-                }));
-        
-        // Info text explaining the settings
-        const infoDiv = containerEl.createDiv();
-        infoDiv.addClass('setting-item-description');
-        infoDiv.style.marginTop = '-10px';
-        infoDiv.style.marginBottom = '20px';
-        infoDiv.style.fontSize = '0.85em';
-        infoDiv.style.color = 'var(--text-muted)';
-        infoDiv.innerHTML = `
-            <strong>Usage:</strong><br>
-            1. Select a streamer from the dropdown OR enter a Twitch ID manually.<br>
-            2. The plugin will automatically fetch and cache their 7TV emotes.<br>
-            3. In notes, type <code>:emote_name:</code> to trigger auto-complete.<br>
-            <br>
-            <strong>Cache Strategies:</strong><br>
-            • <strong>Pre-cache</strong>: Downloads all emotes upfront (best for offline).<br>
-            • <strong>On-Demand</strong>: Caches only emotes you use (recommended).<br>
-            • <strong>No Cache</strong>: Always loads from 7TV (no local storage).
-        `;
-        
-        // Active Configuration Status
+        // Simple status display
         const statusDiv = containerEl.createDiv();
-        statusDiv.addClass('seven-tv-status');
-        statusDiv.style.marginTop = '30px';
-        statusDiv.style.padding = '15px';
-        statusDiv.style.borderRadius = '8px';
-        statusDiv.style.backgroundColor = 'var(--background-secondary-alt)';
+        statusDiv.style.marginTop = '20px';
+        statusDiv.style.padding = '12px';
+        statusDiv.style.borderRadius = '6px';
+        statusDiv.style.backgroundColor = 'var(--background-secondary)';
         statusDiv.style.border = '1px solid var(--background-modifier-border)';
+        statusDiv.style.fontSize = '0.9em';
         
         const activeId = this.plugin.getActiveTwitchId();
-        const activeStreamerKey = this.plugin.settings.selectedStreamerId;
-        const activeStreamerName = activeStreamerKey ? 
-            STREAMER_DISPLAY_MAP.get(activeStreamerKey) : null;
+        const activeStreamer = this.plugin.settings.selectedStreamerId;
+        const streamerName = activeStreamer ? STREAMER_DISPLAY_MAP.get(activeStreamer) : null;
         
         statusDiv.innerHTML = `
-            <h4 style="margin-top: 0;">Current Configuration</h4>
-            <strong>Active Source:</strong> ${activeStreamerName ? `"${activeStreamerName}"` : activeId ? `Manual ID: ${activeId}` : 'None'}<br>
-            <strong>Cache Strategy:</strong> ${this.plugin.settings.cacheStrategy}<br>
-            <strong>Cache Location:</strong> ${this.plugin.settings.cacheStrategy !== 'no-cache' ? this.plugin.cacheDir : 'Disabled'}<br>
-            <strong>Loaded Emotes:</strong> ${this.plugin.hasLoadedEmotes() ? 'Yes' : 'No'}<br>
-            <br>
+            <div style="font-weight: 600; margin-bottom: 4px;">Current Status</div>
+            <div><strong>Source:</strong> ${streamerName || activeId || 'None selected'}</div>
+            <div><strong>Cache:</strong> ${this.plugin.settings.cacheStrategy}</div>
+            <div><strong>Emotes:</strong> ${this.plugin.hasLoadedEmotes() ? 'Loaded' : 'Not loaded'}</div>
         `;
-        
-        console.log('[7TV] Settings tab displayed.');
     }
 }
 
 // =====================================================================
-// SECTION 5: 7TV API INTEGRATION (UNCHANGED)
+// STREAMER SEARCH MODAL WITH TWO-LINE LAYOUT
 // =====================================================================
 
 /**
- * Fetches a streamer's 7TV emotes using their Twitch numeric ID.
- * 
- * @param twitchId - The streamer's Twitch numeric ID (e.g., 71092938)
- * @returns A Map where keys are emote names and values are 7TV IDs
+ * Fuzzy search modal for selecting streamers from the built-in list.
+ * Features a clean two-line layout with streamer name and Twitch ID clearly separated.
+ */
+class StreamerSuggestModal extends FuzzySuggestModal<string> {
+    private plugin: SevenTVPlugin;
+    private onChoose: (streamerKey: string) => void;
+
+    constructor(app: App, plugin: SevenTVPlugin, onChoose: (streamerKey: string) => void) {
+        super(app);
+        this.plugin = plugin;
+        this.onChoose = onChoose;
+        this.setPlaceholder('Search for streamers...');
+        this.limit = 15; // Optimized for performance
+    }
+
+    /**
+     * Returns streamer keys for fuzzy search, sorted alphabetically.
+     * @returns Array of streamer internal identifiers
+     */
+    getItems(): string[] {
+        return Array.from(STREAMER_DISPLAY_MAP.entries())
+            .sort((a, b) => a[1].localeCompare(b[1]))
+            .map(([key]) => key);
+    }
+
+    /**
+     * Returns display text for fuzzy matching.
+     * @param item - Streamer internal identifier
+     * @returns Streamer display name for search matching
+     */
+    getItemText(item: string): string {
+        return STREAMER_DISPLAY_MAP.get(item) || item;
+    }
+
+    /**
+     * Handles streamer selection from the modal.
+     * @param item - Selected streamer key
+     * @param evt - Mouse or keyboard event that triggered selection
+     */
+    onChooseItem(item: string, evt: MouseEvent | KeyboardEvent): void {
+        this.onChoose(item);
+    }
+
+    /**
+     * Renders streamer suggestion with two-line vertical layout.
+     * First line displays streamer name, second line shows Twitch ID.
+     * Includes visual indicator for currently selected streamer.
+     * @param fuzzyMatch - Fuzzy match object containing item and match data
+     * @param el - HTML element to populate with suggestion content
+     */
+    renderSuggestion(fuzzyMatch: FuzzyMatch<string>, el: HTMLElement): void {
+        const item = fuzzyMatch.item;
+        const displayName = STREAMER_DISPLAY_MAP.get(item) || item;
+        const twitchId = STREAMER_ID_MAP.get(item) || 'Unknown ID';
+        
+        // Main container with horizontal layout
+        const container = el.createDiv({ cls: 'seven-tv-streamer-suggestion-container' });
+        
+        // Left section: Vertical stack of streamer information
+        const infoSection = container.createDiv({ cls: 'seven-tv-streamer-info-section' });
+        
+        // Streamer name (primary text, bold)
+        infoSection.createDiv({ 
+            cls: 'seven-tv-streamer-suggestion-name',
+            text: displayName
+        });
+        
+        // Twitch ID (secondary text, smaller and muted)
+        infoSection.createDiv({ 
+            cls: 'seven-tv-streamer-suggestion-id',
+            text: `Twitch ID: ${twitchId}`
+        });
+        
+        // Right section: Selection indicator (only shown if currently selected)
+        if (this.plugin.settings.selectedStreamerId === item) {
+            container.createDiv({ 
+                text: '✓ Selected', 
+                cls: 'seven-tv-streamer-selected-indicator' 
+            });
+        }
+    }
+}
+
+// =====================================================================
+// 7TV API INTEGRATION
+// =====================================================================
+
+/**
+ * Fetches 7TV emote set for a given Twitch user ID.
+ * Implements timeout protection and error handling for network reliability.
+ * @param twitchId - Numeric Twitch user identifier
+ * @returns Map of emote names to 7TV IDs
  */
 async function fetchEmotesForTwitchId(twitchId: string): Promise<Map<string, string>> {
     const emoteMap = new Map<string, string>();
@@ -804,18 +766,21 @@ async function fetchEmotesForTwitchId(twitchId: string): Promise<Map<string, str
     emoteMap.set('HUH', '01FFMS6Q4G0009CAK0J14692AY');
     
     try {
+        // Fetch user data to get emote set ID
         const userRes = await fetch(`https://7tv.io/v3/users/twitch/${encodeURIComponent(twitchId)}`);
         if (!userRes.ok) throw new Error(`HTTP ${userRes.status}`);
         const userData = await userRes.json();
         
-        const emoteSetId = userData?.emote_set?.id || 
-                          (userData?.emote_sets && userData.emote_sets[0]?.id);
+        const emoteSetId = userData?.emote_set?.id ||
+            (userData?.emote_sets && userData.emote_sets[0]?.id);
         if (!emoteSetId) throw new Error('No emote set found');
         
+        // Fetch emote set data
         const setRes = await fetch(`https://7tv.io/v3/emote-sets/${encodeURIComponent(emoteSetId)}`);
         if (!setRes.ok) throw new Error(`HTTP ${setRes.status}`);
         const setData = await setRes.json();
         
+        // Extract emotes from set data
         if (setData?.emotes && Array.isArray(setData.emotes)) {
             setData.emotes.forEach((emote: any) => {
                 if (emote.name && emote.id) {
@@ -829,7 +794,3 @@ async function fetchEmotesForTwitchId(twitchId: string): Promise<Map<string, str
     
     return emoteMap;
 }
-
-// =====================================================================
-// END OF PLUGIN CODE
-// =====================================================================
