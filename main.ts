@@ -4,9 +4,9 @@
  * Integrates 7TV (Twitch) emotes into Obsidian markdown editor with auto-complete,
  * multiple caching strategies, and streamer-specific emote sets.
  * 
- * @version 1.1.0
+ * @version 1.0.2
  * @license MIT
- * @author Your Name
+ * @author Tinerou
  */
 
 import {
@@ -142,7 +142,8 @@ class DownloadProgressTracker {
         this.createStatusBar();
         this.updateStatusBar();
         
-        this.plugin.logger.log(`Initiating download of ${totalEmotes} emotes`, 'basic');
+        // Use plugin's logging method instead of accessing private logger
+        this.plugin.logMessage(`Initiating download of ${totalEmotes} emotes`, 'basic');
     }
 
     /**
@@ -235,7 +236,7 @@ class DownloadProgressTracker {
         
         this.isCancelled = true;
         this.isActive = false;
-        this.plugin.logger.log('Download cancelled by user', 'basic');
+        this.plugin.logMessage('Download cancelled by user', 'basic');
         
         if (this.onCancelCallback) {
             this.onCancelCallback();
@@ -347,7 +348,7 @@ class DownloadProgressTracker {
         }
         
         if (!this.isCancelled) {
-            this.plugin.logger.log(
+            this.plugin.logMessage(
                 `Download completed: ${this.downloadedEmotes - this.failedEmotes}/${this.totalEmotes} ` +
                 `emotes (${this.formatBytes(this.downloadedBytes)}) in ${totalTime}s`, 
                 'basic'
@@ -374,110 +375,6 @@ class DownloadProgressTracker {
         }
         this.isActive = false;
         this.isCancelled = false;
-    }
-}
-
-// =====================================================================
-// PLUGIN LOGGER
-// =====================================================================
-
-/**
- * Configurable logging utility with verbosity levels.
- * 
- * Provides filtered console output with performance timing capabilities
- * for debugging and operational monitoring.
- */
-class PluginLogger {
-    private plugin: SevenTVPlugin;
-    private defaultLogLevel: 'basic' | 'verbose' | 'debug' = 'basic';
-
-    /**
-     * Creates logger instance bound to plugin.
-     * 
-     * @param plugin - Parent plugin instance for settings access
-     */
-    constructor(plugin: SevenTVPlugin) {
-        this.plugin = plugin;
-    }
-
-    /**
-     * Main logging method with level-based filtering.
-     * 
-     * @param message - Text to output to console
-     * @param level - Minimum verbosity level required for output
-     */
-    log(message: string, level: 'basic' | 'verbose' | 'debug' = 'basic'): void {
-        const currentLevel = this.getLogLevel();
-        const levels = ['none', 'basic', 'verbose', 'debug'];
-        
-        if (levels.indexOf(currentLevel) >= levels.indexOf(level)) {
-            console.log(`[7TV] ${message}`);
-        }
-    }
-
-    /**
-     * Safely retrieves current log level with fallback handling.
-     * 
-     * @returns Current log level or default if settings unavailable
-     */
-    private getLogLevel(): string {
-        try {
-            if (!this.plugin || !this.plugin.settings) {
-                return this.defaultLogLevel;
-            }
-            return this.plugin.settings.logLevel || this.defaultLogLevel;
-        } catch (error) {
-            return this.defaultLogLevel;
-        }
-    }
-
-    /**
-     * Wraps async operations with performance timing when debug logging enabled.
-     * 
-     * @param operation - Descriptive name of operation being timed
-     * @param callback - Async function to execute and time
-     * @returns Promise resolving to callback result
-     */
-    async withTiming<T>(operation: string, callback: () => Promise<T>): Promise<T> {
-        if (this.getLogLevel() === 'debug') {
-            const startTime = performance.now();
-            try {
-                const result = await callback();
-                const duration = performance.now() - startTime;
-                this.log(`${operation} completed in ${duration.toFixed(1)}ms`, 'debug');
-                return result;
-            } catch (error) {
-                const duration = performance.now() - startTime;
-                this.log(`${operation} failed after ${duration.toFixed(1)}ms: ${error}`, 'debug');
-                throw error;
-            }
-        } else {
-            return callback();
-        }
-    }
-
-    /**
-     * Outputs warning messages unless logging is disabled.
-     * 
-     * @param message - Warning text to display
-     */
-    warn(message: string): void {
-        const currentLevel = this.getLogLevel();
-        if (currentLevel !== 'none') {
-            console.warn(`[7TV] ${message}`);
-        }
-    }
-
-    /**
-     * Outputs error messages unless logging is disabled.
-     * 
-     * @param message - Error text to display
-     */
-    error(message: string): void {
-        const currentLevel = this.getLogLevel();
-        if (currentLevel !== 'none') {
-            console.error(`[7TV] ${message}`);
-        }
     }
 }
 
@@ -542,6 +439,55 @@ export default class SevenTVPlugin extends Plugin {
      */
     getCacheDir(): string {
         return this.CACHE_DIR;
+    }
+
+    /**
+     * Gets the current emote count from the suggestion engine.
+     * 
+     * @returns Number of loaded emotes, or 0 if not initialized
+     */
+    getEmoteCount(): number {
+        return this.emoteSuggest ? this.emoteSuggest.getEmoteCount() : 0;
+    }
+
+    /**
+     * Gets the current emote map from the suggestion engine.
+     * 
+     * @returns Map of emote names to IDs, or empty map if not initialized
+     */
+    getEmoteMap(): Map<string, string> {
+        return this.emoteSuggest ? this.emoteSuggest.getEmoteMap() : new Map();
+    }
+
+    /**
+     * Public logging method to allow external classes to log messages.
+     * 
+     * @param message - Message to log
+     * @param level - Log level for the message
+     */
+    logMessage(message: string, level: 'basic' | 'verbose' | 'debug' = 'basic'): void {
+        if (this.logger) {
+            this.logger.log(message, level);
+        } else {
+            // Fallback to console if logger not initialized
+            console.log(`[7TV] ${message}`);
+        }
+    }
+
+    /**
+     * Public method to reset pre-cache completion status.
+     */
+    resetPreCacheStatus(): void {
+        this.preCacheComplete = false;
+    }
+
+    /**
+     * Public method to check if pre-cache is complete.
+     * 
+     * @returns True if pre-cache operation has completed
+     */
+    isPreCacheComplete(): boolean {
+        return this.preCacheComplete;
     }
 
     /**
@@ -850,7 +796,7 @@ export default class SevenTVPlugin extends Plugin {
      * @returns Boolean indicating if additional emotes are loaded
      */
     public hasLoadedEmotes(): boolean {
-        return this.emoteSuggest !== undefined && this.emoteSuggest.getEmoteCount() > 1;
+        return this.getEmoteCount() > 1; // 1 for default HUH emote
     }
 
     /**
@@ -859,7 +805,7 @@ export default class SevenTVPlugin extends Plugin {
      * @returns Promise resolving when pre-cache completes
      */
     public async triggerPreCache(): Promise<void> {
-        const emoteMap = this.emoteSuggest.getEmoteMap();
+        const emoteMap = this.getEmoteMap();
         if (!emoteMap || emoteMap.size <= 1) { // 1 for default HUH emote
             throw new Error('No emotes loaded to cache');
         }
@@ -1048,15 +994,6 @@ export default class SevenTVPlugin extends Plugin {
     }
 
     /**
-     * Checks if pre-cache has completed.
-     * 
-     * @returns Boolean indicating if pre-cache has completed
-     */
-    public isPreCacheComplete(): boolean {
-        return this.preCacheComplete;
-    }
-
-    /**
      * Loads plugin settings from Obsidian's persistent storage.
      */
     async loadSettings() {
@@ -1068,6 +1005,110 @@ export default class SevenTVPlugin extends Plugin {
      */
     async saveSettings() {
         await this.saveData(this.settings);
+    }
+}
+
+// =====================================================================
+// PLUGIN LOGGER
+// =====================================================================
+
+/**
+ * Configurable logging utility with verbosity levels.
+ * 
+ * Provides filtered console output with performance timing capabilities
+ * for debugging and operational monitoring.
+ */
+class PluginLogger {
+    private plugin: SevenTVPlugin;
+    private defaultLogLevel: 'basic' | 'verbose' | 'debug' = 'basic';
+
+    /**
+     * Creates logger instance bound to plugin.
+     * 
+     * @param plugin - Parent plugin instance for settings access
+     */
+    constructor(plugin: SevenTVPlugin) {
+        this.plugin = plugin;
+    }
+
+    /**
+     * Main logging method with level-based filtering.
+     * 
+     * @param message - Text to output to console
+     * @param level - Minimum verbosity level required for output
+     */
+    log(message: string, level: 'basic' | 'verbose' | 'debug' = 'basic'): void {
+        const currentLevel = this.getLogLevel();
+        const levels = ['none', 'basic', 'verbose', 'debug'];
+        
+        if (levels.indexOf(currentLevel) >= levels.indexOf(level)) {
+            console.log(`[7TV] ${message}`);
+        }
+    }
+
+    /**
+     * Safely retrieves current log level with fallback handling.
+     * 
+     * @returns Current log level or default if settings unavailable
+     */
+    private getLogLevel(): string {
+        try {
+            if (!this.plugin || !this.plugin.settings) {
+                return this.defaultLogLevel;
+            }
+            return this.plugin.settings.logLevel || this.defaultLogLevel;
+        } catch (error) {
+            return this.defaultLogLevel;
+        }
+    }
+
+    /**
+     * Wraps async operations with performance timing when debug logging enabled.
+     * 
+     * @param operation - Descriptive name of operation being timed
+     * @param callback - Async function to execute and time
+     * @returns Promise resolving to callback result
+     */
+    async withTiming<T>(operation: string, callback: () => Promise<T>): Promise<T> {
+        if (this.getLogLevel() === 'debug') {
+            const startTime = performance.now();
+            try {
+                const result = await callback();
+                const duration = performance.now() - startTime;
+                this.log(`${operation} completed in ${duration.toFixed(1)}ms`, 'debug');
+                return result;
+            } catch (error) {
+                const duration = performance.now() - startTime;
+                this.log(`${operation} failed after ${duration.toFixed(1)}ms: ${error}`, 'debug');
+                throw error;
+            }
+        } else {
+            return callback();
+        }
+    }
+
+    /**
+     * Outputs warning messages unless logging is disabled.
+     * 
+     * @param message - Warning text to display
+     */
+    warn(message: string): void {
+        const currentLevel = this.getLogLevel();
+        if (currentLevel !== 'none') {
+            console.warn(`[7TV] ${message}`);
+        }
+    }
+
+    /**
+     * Outputs error messages unless logging is disabled.
+     * 
+     * @param message - Error text to display
+     */
+    error(message: string): void {
+        const currentLevel = this.getLogLevel();
+        if (currentLevel !== 'none') {
+            console.error(`[7TV] ${message}`);
+        }
     }
 }
 
@@ -1229,16 +1270,6 @@ class EmoteSuggest extends EditorSuggest<string> {
 
 // =====================================================================
 // ENHANCED SETTINGS TAB
-// =====================================================================
-
-/**
- * Comprehensive settings interface with improved UX organization.
- * 
- * Features streamlined cache strategy selection, detailed status display,
- * and clear separation between primary and advanced configuration.
- */
-// =====================================================================
-// ENHANCED SETTINGS TAB (UPDATED)
 // =====================================================================
 
 /**
@@ -1532,8 +1563,8 @@ class EnhancedSettingTab extends PluginSettingTab {
                         return;
                     }
                     
-                    // Estimate size based on average emote (5KB)
-                    const emoteCount = this.plugin.emoteSuggest?.getEmoteCount() || 0;
+                    // Use public method to get emote count
+                    const emoteCount = this.plugin.getEmoteCount();
                     const estimatedSizeMB = ((emoteCount * 5) / 1024).toFixed(1);
                     
                     const confirmMsg = `This will download all ${emoteCount} emotes (est. ${estimatedSizeMB}MB).\n\nThis may take a while. Continue?`;
@@ -1583,8 +1614,8 @@ class EnhancedSettingTab extends PluginSettingTab {
                             const cacheDir = this.plugin.getCacheDir();
                             if (await this.plugin.app.vault.adapter.exists(cacheDir)) {
                                 await this.plugin.app.vault.adapter.rmdir(cacheDir, true);
-                                await this.plugin.initializeCache();
-                                this.plugin.preCacheComplete = false;
+                                await this.plugin.ensureCacheInitialized(); // Use public method
+                                this.plugin.resetPreCacheStatus(); // Use public method
                                 await this.updateCacheStats();
                                 new Notice('Cache cleared successfully');
                                 console.log('[7TV] Cache cleared');
@@ -1771,7 +1802,8 @@ class EnhancedSettingTab extends PluginSettingTab {
             const activeId = this.plugin.getActiveTwitchId();
             const activeStreamer = this.plugin.settings.selectedStreamerId;
             const streamerName = activeStreamer ? STREAMER_DISPLAY_MAP.get(activeStreamer) : null;
-            const emoteCount = this.plugin.hasLoadedEmotes() ? this.plugin.emoteSuggest?.getEmoteCount() || 0 : 0;
+            // Use public method to get emote count
+            const emoteCount = this.plugin.getEmoteCount();
             const isPreCaching = this.plugin.isPreCaching();
             const preCacheStatus = this.plugin.isPreCacheComplete() ? 'Complete' : isPreCaching ? 'In Progress' : 'Not Started';
             
@@ -1814,7 +1846,10 @@ class EnhancedSettingTab extends PluginSettingTab {
                 `;
             }
             
-            this.statusDiv.innerHTML = statusHTML;
+            // Fixed: Use innerHTML property correctly
+            if (this.statusDiv) {
+                this.statusDiv.innerHTML = statusHTML;
+            }
             
             // Also update action buttons in case pre-cache status changed
             this.updateActionButtons();
