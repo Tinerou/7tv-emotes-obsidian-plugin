@@ -18,7 +18,7 @@ Integrate 7TV emotes directly into your Obsidian notes with auto-complete sugges
 3. Enable the plugin in Obsidian: Settings → Community plugins → 7TV Emotes
 
 ### From Obsidian Community Plugins
-*(Coming soon - submit your plugin to the community plugins list)*
+*(Coming soon)*
 
 ## ⚙️ Setup
 
@@ -68,3 +68,4 @@ If auto-complete doesn't trigger, use the command palette:
 I can't wait to use emotes on Obsidian! :pog:
 ```
 Note: At this point in time you must have to click emote preview or press `ENTER` to insert emote.
+
