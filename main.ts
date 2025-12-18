@@ -1237,6 +1237,16 @@ class EmoteSuggest extends EditorSuggest<string> {
  * Features streamlined cache strategy selection, detailed status display,
  * and clear separation between primary and advanced configuration.
  */
+// =====================================================================
+// ENHANCED SETTINGS TAB (UPDATED)
+// =====================================================================
+
+/**
+ * Comprehensive settings interface with improved UX organization.
+ * 
+ * Features streamlined cache strategy selection with immediate visual feedback,
+ * detailed status display, and clear separation between primary and advanced configuration.
+ */
 class EnhancedSettingTab extends PluginSettingTab {
     /** Reference to main plugin instance */
     plugin: SevenTVPlugin;
@@ -1255,6 +1265,13 @@ class EnhancedSettingTab extends PluginSettingTab {
     
     /** Cache statistics for display */
     private cacheStats: { count: number; size: number } = { count: 0, size: 0 };
+    
+    /** UI element references for immediate updates */
+    private onDemandRadio: HTMLElement | null = null;
+    private noCacheRadio: HTMLElement | null = null;
+    private preCacheButton: HTMLButtonElement | null = null;
+    private cancelPreCacheButton: HTMLButtonElement | null = null;
+    private clearCacheButton: HTMLButtonElement | null = null;
 
     /**
      * Creates settings tab instance.
@@ -1413,15 +1430,15 @@ class EnhancedSettingTab extends PluginSettingTab {
                 const cacheContainer = containerEl.createDiv();
                 cacheContainer.style.marginBottom = '16px';
                 
-                // On-Demand Cache option
+                // On-Demand Cache option (Default)
                 const onDemandOption = cacheContainer.createDiv();
                 onDemandOption.style.display = 'flex';
                 onDemandOption.style.alignItems = 'flex-start';
                 onDemandOption.style.marginBottom = '12px';
                 onDemandOption.style.cursor = 'pointer';
                 
-                const onDemandRadio = onDemandOption.createDiv();
-                onDemandRadio.style.cssText = `
+                this.onDemandRadio = onDemandOption.createDiv();
+                this.onDemandRadio.style.cssText = `
                     width: 16px;
                     height: 16px;
                     border-radius: 50%;
@@ -1431,6 +1448,7 @@ class EnhancedSettingTab extends PluginSettingTab {
                     flex-shrink: 0;
                     background: ${this.plugin.settings.cacheStrategy === 'on-demand' ? 'var(--interactive-accent)' : 'transparent'};
                     border-color: ${this.plugin.settings.cacheStrategy === 'on-demand' ? 'var(--interactive-accent)' : 'var(--text-muted)'};
+                    transition: background-color 0.2s ease, border-color 0.2s ease;
                 `;
                 
                 const onDemandContent = onDemandOption.createDiv();
@@ -1448,7 +1466,8 @@ class EnhancedSettingTab extends PluginSettingTab {
                         this.plugin.settings.cacheStrategy = 'on-demand';
                         await this.plugin.saveSettings();
                         await this.plugin.ensureCacheInitialized();
-                        this.updateCacheStrategyUI();
+                        this.updateRadioButtons();
+                        this.updateActionButtons();
                         new Notice('Switched to On-Demand Cache');
                     }
                 });
@@ -1460,8 +1479,8 @@ class EnhancedSettingTab extends PluginSettingTab {
                 noCacheOption.style.marginBottom = '16px';
                 noCacheOption.style.cursor = 'pointer';
                 
-                const noCacheRadio = noCacheOption.createDiv();
-                noCacheRadio.style.cssText = `
+                this.noCacheRadio = noCacheOption.createDiv();
+                this.noCacheRadio.style.cssText = `
                     width: 16px;
                     height: 16px;
                     border-radius: 50%;
@@ -1471,6 +1490,7 @@ class EnhancedSettingTab extends PluginSettingTab {
                     flex-shrink: 0;
                     background: ${this.plugin.settings.cacheStrategy === 'no-cache' ? 'var(--interactive-accent)' : 'transparent'};
                     border-color: ${this.plugin.settings.cacheStrategy === 'no-cache' ? 'var(--interactive-accent)' : 'var(--text-muted)'};
+                    transition: background-color 0.2s ease, border-color 0.2s ease;
                 `;
                 
                 const noCacheContent = noCacheOption.createDiv();
@@ -1487,7 +1507,8 @@ class EnhancedSettingTab extends PluginSettingTab {
                     if (this.plugin.settings.cacheStrategy !== 'no-cache') {
                         this.plugin.settings.cacheStrategy = 'no-cache';
                         await this.plugin.saveSettings();
-                        this.updateCacheStrategyUI();
+                        this.updateRadioButtons();
+                        this.updateActionButtons();
                         new Notice('Switched to No Cache mode');
                     }
                 });
@@ -1501,11 +1522,11 @@ class EnhancedSettingTab extends PluginSettingTab {
                 actionContainer.style.marginBottom = '24px';
 
                 // Pre-cache Now button
-                const preCacheButton = actionContainer.createEl('button');
-                preCacheButton.textContent = 'Pre-cache Now';
-                preCacheButton.style.flex = '1';
+                this.preCacheButton = actionContainer.createEl('button');
+                this.preCacheButton.textContent = 'Pre-cache Now';
+                this.preCacheButton.style.flex = '1';
                 
-                preCacheButton.addEventListener('click', async () => {
+                this.preCacheButton.addEventListener('click', async () => {
                     if (!this.plugin.hasLoadedEmotes()) {
                         new Notice('No emotes loaded to cache');
                         return;
@@ -1522,6 +1543,7 @@ class EnhancedSettingTab extends PluginSettingTab {
                         try {
                             await this.plugin.triggerPreCache();
                             this.updateStatus();
+                            this.updateActionButtons(); // Update cancel button state
                         } catch (error) {
                             new Notice(`Failed to start pre-cache: ${error.message}`);
                         }
@@ -1529,27 +1551,27 @@ class EnhancedSettingTab extends PluginSettingTab {
                 });
 
                 // Cancel Pre-cache button
-                const cancelPreCacheButton = actionContainer.createEl('button');
-                cancelPreCacheButton.textContent = 'Cancel Pre-cache';
-                cancelPreCacheButton.className = 'mod-warning';
+                this.cancelPreCacheButton = actionContainer.createEl('button');
+                this.cancelPreCacheButton.textContent = 'Cancel Pre-cache';
+                this.cancelPreCacheButton.className = 'mod-warning';
                 
-                cancelPreCacheButton.addEventListener('click', () => {
+                this.cancelPreCacheButton.addEventListener('click', () => {
                     if (this.plugin.isPreCaching()) {
                         this.plugin.cancelPreCache();
                         new Notice('Pre-cache cancelled');
-                        cancelPreCacheButton.disabled = true;
+                        this.updateActionButtons();
                         this.updateStatus();
                     }
                 });
 
                 // Clear Cache button
-                const clearCacheButton = containerEl.createEl('button');
-                clearCacheButton.textContent = 'Clear Cache';
-                clearCacheButton.style.width = '100%';
-                clearCacheButton.style.marginTop = '8px';
-                clearCacheButton.style.marginBottom = '24px';
+                this.clearCacheButton = containerEl.createEl('button');
+                this.clearCacheButton.textContent = 'Clear Cache';
+                this.clearCacheButton.style.width = '100%';
+                this.clearCacheButton.style.marginTop = '8px';
+                this.clearCacheButton.style.marginBottom = '24px';
                 
-                clearCacheButton.addEventListener('click', async () => {
+                this.clearCacheButton.addEventListener('click', async () => {
                     const warningMsg = `⚠️ Warning: Clearing the cache may cause emotes to not display correctly if:\n\n` +
                                      `• The original CDN links change or break\n` +
                                      `• You're offline and emotes aren't cached\n` +
@@ -1591,7 +1613,8 @@ class EnhancedSettingTab extends PluginSettingTab {
                 // Update cache stats and status display
                 await this.updateCacheStats();
                 this.updateStatus();
-                this.updateCacheStrategyUI();
+                this.updateRadioButtons();
+                this.updateActionButtons();
 
                 // ======================
                 // ADVANCED SETTINGS
@@ -1676,11 +1699,66 @@ class EnhancedSettingTab extends PluginSettingTab {
     }
 
     /**
-     * Updates cache strategy UI element states.
+     * Updates radio button visual states based on current cache strategy.
      */
-    private updateCacheStrategyUI(): void {
-        // This method would update button states based on current strategy
-        // Implementation depends on UI elements created in display()
+    private updateRadioButtons(): void {
+        if (!this.onDemandRadio || !this.noCacheRadio) return;
+        
+        const isOnDemand = this.plugin.settings.cacheStrategy === 'on-demand';
+        const isNoCache = this.plugin.settings.cacheStrategy === 'no-cache';
+        
+        // Update On-Demand radio button
+        this.onDemandRadio.style.background = isOnDemand ? 'var(--interactive-accent)' : 'transparent';
+        this.onDemandRadio.style.borderColor = isOnDemand ? 'var(--interactive-accent)' : 'var(--text-muted)';
+        
+        // Update No Cache radio button
+        this.noCacheRadio.style.background = isNoCache ? 'var(--interactive-accent)' : 'transparent';
+        this.noCacheRadio.style.borderColor = isNoCache ? 'var(--interactive-accent)' : 'var(--text-muted)';
+    }
+
+    /**
+     * Updates action button states based on current plugin state.
+     */
+    private updateActionButtons(): void {
+        if (!this.preCacheButton || !this.cancelPreCacheButton || !this.clearCacheButton) return;
+        
+        const isNoCache = this.plugin.settings.cacheStrategy === 'no-cache';
+        const hasEmotes = this.plugin.hasLoadedEmotes();
+        const isPreCaching = this.plugin.isPreCaching();
+        
+        // Pre-cache button
+        this.preCacheButton.disabled = isNoCache || !hasEmotes;
+        
+        // Cancel pre-cache button
+        this.cancelPreCacheButton.disabled = !isPreCaching;
+        
+        // Clear cache button
+        this.clearCacheButton.disabled = isNoCache;
+        
+        // Visual feedback for disabled buttons
+        if (this.preCacheButton.disabled) {
+            this.preCacheButton.style.opacity = '0.5';
+            this.preCacheButton.style.cursor = 'not-allowed';
+        } else {
+            this.preCacheButton.style.opacity = '1';
+            this.preCacheButton.style.cursor = 'pointer';
+        }
+        
+        if (this.cancelPreCacheButton.disabled) {
+            this.cancelPreCacheButton.style.opacity = '0.5';
+            this.cancelPreCacheButton.style.cursor = 'not-allowed';
+        } else {
+            this.cancelPreCacheButton.style.opacity = '1';
+            this.cancelPreCacheButton.style.cursor = 'pointer';
+        }
+        
+        if (this.clearCacheButton.disabled) {
+            this.clearCacheButton.style.opacity = '0.5';
+            this.clearCacheButton.style.cursor = 'not-allowed';
+        } else {
+            this.clearCacheButton.style.opacity = '1';
+            this.clearCacheButton.style.cursor = 'pointer';
+        }
     }
 
     /**
@@ -1737,6 +1815,9 @@ class EnhancedSettingTab extends PluginSettingTab {
             }
             
             this.statusDiv.innerHTML = statusHTML;
+            
+            // Also update action buttons in case pre-cache status changed
+            this.updateActionButtons();
         });
     }
 
@@ -1771,6 +1852,7 @@ class EnhancedSettingTab extends PluginSettingTab {
                 await this.plugin.refreshEmotesForUser(twitchId);
                 await this.updateCacheStats();
                 this.updateStatus();
+                this.updateActionButtons(); // Update pre-cache button availability
                 new Notice(`${displayName}'s emotes loaded`);
             } catch (error) {
                 console.error('[7TV] Failed to load emotes:', error);
@@ -1792,6 +1874,14 @@ class EnhancedSettingTab extends PluginSettingTab {
             clearTimeout(this.debounceTimer);
             this.debounceTimer = null;
         }
+        
+        // Clear element references
+        this.onDemandRadio = null;
+        this.noCacheRadio = null;
+        this.preCacheButton = null;
+        this.cancelPreCacheButton = null;
+        this.clearCacheButton = null;
+        this.statusDiv = null;
         
         this.isDisplaying = false;
         super.hide();
