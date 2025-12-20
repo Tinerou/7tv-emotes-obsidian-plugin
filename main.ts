@@ -2636,18 +2636,20 @@ export default class SevenTVPlugin extends Plugin {
      * 
      * @param twitchId - Numeric Twitch user identifier
      */
-    async refreshEmotesForUser(twitchId: string): Promise<void> {
-        this.logger.log(`Fetching emotes for Twitch ID: ${twitchId}`, 'basic');
-        const newEmoteMap = await fetchEmotesForTwitchId(twitchId);
-        
-        if (newEmoteMap.size > 0) {
-            this.emoteSuggest.updateEmoteMap(newEmoteMap);
-            this.logger.log(`Loaded ${newEmoteMap.size} emotes`, 'basic');
-            
-            // Reset pre-cache status
-            this.preCacheComplete = false;
-        }
-    }
+	async refreshEmotesForUser(twitchId: string): Promise<void> {
+		this.logger.log(`Fetching emotes for Twitch ID: ${twitchId}`, 'basic');
+		const newEmoteMap = await fetchEmotesForTwitchId(twitchId);
+		
+		if (newEmoteMap.size <= 2) {
+			throw new Error(`Only found ${newEmoteMap.size} emotes for user ${twitchId}. Expected more than 2 emotes.`);
+		}
+		
+		this.emoteSuggest.updateEmoteMap(newEmoteMap);
+		this.logger.log(`Loaded ${newEmoteMap.size} emotes`, 'basic');
+		
+		// Reset pre-cache status
+		this.preCacheComplete = false;
+	}
 
     /**
      * Routes emote insertion to appropriate method based on cache strategy.
