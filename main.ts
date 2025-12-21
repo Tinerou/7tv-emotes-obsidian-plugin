@@ -2016,9 +2016,51 @@ const BUILT_IN_STREAMERS: Array<[string, string, string]> = [
     ['Zwebackhd', '43650535', 'zwebackhd'],
     ['Zxcursed', 'ERROR', 'zxcursed'],
     ['Zy0xxx', '79202256', 'zy0xxx'],
-
-
-	// more to come :)
+    ['ありさか', 'ERROR', 'ありさか'],
+    ['だるまいずごっど', 'ERROR', 'だるまいずごっど'],
+    ['らっだぁ', 'ERROR', 'らっだぁ'],
+    ['スタンミ', 'ERROR', 'スタンミ'],
+    ['ボドカさん', 'ERROR', 'ボドカさん'],
+    ['丁特', 'ERROR', '丁特'],
+    ['亞洲統神', 'ERROR', '亞洲統神'],
+    ['依渟', 'ERROR', '依渟'],
+    ['加藤純一うん〇ちゃん', 'ERROR', '加藤純一うん〇ちゃん'],
+    ['叶ちゃんねる', 'ERROR', '叶ちゃんねる'],
+    ['夢野あかり', 'ERROR', '夢野あかり'],
+    ['柊ツルギ', 'ERROR', '柊ツルギ'],
+    ['橘ひなの', 'ERROR', '橘ひなの'],
+    ['猫麦とろろ', 'ERROR', '猫麦とろろ'],
+    ['老皮', 'ERROR', '老皮'],
+    ['赤見かるび', 'ERROR', '赤見かるび'],
+    ['赤鬼伯伯', 'ERROR', '赤鬼伯伯'],
+    ['餐餐自由配', 'ERROR', '餐餐自由配'],
+    ['강지', 'ERROR', '강지'],
+    ['갱생레바', 'ERROR', '갱생레바'],
+    ['견자희', 'ERROR', '견자희'],
+    ['괴물쥐123', 'ERROR', '괴물쥐123'],
+    ['김블루', 'ERROR', '김블루'],
+    ['김재원', 'ERROR', '김재원_'],
+    ['다주', 'ERROR', '다주'],
+    ['랄로', 'ERROR', '랄로'],
+    ['마젠타', 'ERROR', '마젠타_'],
+    ['머독', 'ERROR', '머독'],
+    ['빛베리', 'ERROR', '빛베리'],
+    ['서새봄냥', 'ERROR', '서새봄냥'],
+    ['수련수련', 'ERROR', '수련수련'],
+    ['악녀', 'ERROR', '악녀'],
+    ['앰비션', 'ERROR', '앰비션_'],
+    ['오킹', 'ERROR', '오킹'],
+    ['우왁굳', 'ERROR', '우왁굳'],
+    ['우주하마', 'ERROR', '우주하마'],
+    ['울프', 'ERROR', '울프'],
+    ['윤개굴이', 'ERROR', '윤개굴이'],
+    ['침착맨', 'ERROR', '침착맨'],
+    ['탬탬버린', 'ERROR', '탬탬버린'],
+    ['테디이', 'ERROR', '테디이'],
+    ['파카9999', 'ERROR', '파카9999'],
+    ['풍월량', 'ERROR', '풍월량'],
+    ['한갱', 'ERROR', '한갱'],
+    ['한동숙', 'ERROR', '한동숙']
 ];
 
 /**
@@ -2091,7 +2133,6 @@ class DownloadProgressTracker {
         this.createStatusBar();
         this.updateStatusBar();
         
-        // Use plugin's logging method instead of accessing private logger
         this.plugin.logMessage(`Initiating download of ${totalEmotes} emotes`, 'basic');
     }
 
@@ -2170,7 +2211,6 @@ class DownloadProgressTracker {
             </div>
         `;
         
-        // Add cancel button event listener
         const cancelButton = this.statusBarEl.querySelector('button');
         if (cancelButton) {
             cancelButton.addEventListener('click', () => this.cancel());
@@ -2206,7 +2246,6 @@ class DownloadProgressTracker {
                 </div>
             `;
             
-            // Remove status bar after 3 seconds
             setTimeout(() => {
                 if (this.statusBarEl && this.statusBarEl.parentNode) {
                     this.statusBarEl.remove();
@@ -2287,7 +2326,6 @@ class DownloadProgressTracker {
                 </div>
             `;
             
-            // Remove status bar after 5 seconds
             setTimeout(() => {
                 if (this.statusBarEl && this.statusBarEl.parentNode) {
                     this.statusBarEl.remove();
@@ -2418,7 +2456,6 @@ export default class SevenTVPlugin extends Plugin {
         if (this.logger) {
             this.logger.log(message, level);
         } else {
-            // Fallback to console if logger not initialized
             console.log(`[7TV] ${message}`);
         }
     }
@@ -2448,35 +2485,29 @@ export default class SevenTVPlugin extends Plugin {
     async onload() {
         console.time('[7TV] Plugin initialization');
         
-        // Load settings first for logger initialization
         await this.loadSettings();
         console.timeLog('[7TV] Plugin initialization', 'Settings loaded');
         
-        // Initialize logger with loaded settings
         this.logger = new PluginLogger(this);
         this.logger.log('Plugin initialization started', 'basic');
         
-        // Initialize download tracker
         this.downloadTracker = new DownloadProgressTracker(this);
         
         this.injectStyles();
         this.logger.log('CSS injected', 'verbose');
         console.timeLog('[7TV] Plugin initialization', 'CSS injected');
         
-        // Initialize cache based on selected strategy
         if (this.settings.cacheStrategy !== 'no-cache') {
             await this.initializeCache();
             this.logger.log(`Cache initialized (strategy: ${this.settings.cacheStrategy})`, 'verbose');
             console.timeLog('[7TV] Plugin initialization', 'Cache initialized');
         }
         
-        // Set up emote auto-completion
         this.emoteSuggest = new EmoteSuggest(this.app, this);
         this.registerEditorSuggest(this.emoteSuggest);
         this.logger.log('Emote suggest registered', 'verbose');
         console.timeLog('[7TV] Plugin initialization', 'Emote suggest registered');
         
-        // Load emotes if a streamer is already configured
         const activeId = this.getActiveTwitchId();
         if (activeId) {
             this.logger.log(`Loading emotes for ID: ${activeId}`, 'basic');
@@ -2484,16 +2515,6 @@ export default class SevenTVPlugin extends Plugin {
             await this.refreshEmotesForUser(activeId);
         }
         
-        // Register fallback command for manual emote insertion
-        this.addCommand({
-            id: 'insert-huh-emote-manual',
-            name: 'Insert HUH emote (Manual Fallback)',
-            editorCallback: async (editor: Editor) => {
-                await this.insertEmoteByStrategy(editor, 'HUH', '01FFMS6Q4G0009CAK0J14692AY');
-            }
-        });
-        
-        // Register command to cancel active pre-cache
         this.addCommand({
             id: 'cancel-pre-cache',
             name: 'Cancel active pre-cache download',
@@ -2508,7 +2529,6 @@ export default class SevenTVPlugin extends Plugin {
             }
         });
         
-        // Register settings tab
         this.addSettingTab(new EnhancedSettingTab(this.app, this));
         
         console.timeEnd('[7TV] Plugin initialization');
@@ -2524,24 +2544,20 @@ export default class SevenTVPlugin extends Plugin {
     private injectStyles(): void {
         const styleId = 'seven-tv-emotes-styles';
         
-        // Prevent duplicate injections via internal flag
         if (this.stylesInjected) {
             this.logger.log('Styles already injected (internal flag), skipping', 'debug');
             return;
         }
         
-        // Verify style element doesn't already exist in DOM
         if (document.getElementById(styleId)) {
             this.logger.log('Style element already exists in DOM, reusing', 'debug');
             this.stylesInjected = true;
             return;
         }
         
-        // Create and inject the style element
         const styleEl = document.createElement('style');
         styleEl.id = styleId;
         styleEl.textContent = `
-            /* Streamer suggestion modal styling */
             .seven-tv-streamer-suggestion-container {
                 display: flex;
                 align-items: flex-start;
@@ -2581,7 +2597,6 @@ export default class SevenTVPlugin extends Plugin {
                 align-self: center;
             }
             
-            /* Emote suggestion styling */
             .seven-tv-suggestion-item {
                 display: flex;
                 align-items: center;
@@ -2613,17 +2628,14 @@ export default class SevenTVPlugin extends Plugin {
      * are terminated to prevent memory leaks.
      */
     onunload() {
-        // Clean up any active operations
         if (this.activeDownloadPromise) {
             console.log('[7TV] Active download operation cancelled on unload');
         }
         
-        // Abort any active downloads
         if (this.abortController) {
             this.abortController.abort();
         }
         
-        // Clean up download tracker
         this.downloadTracker.cleanup();
         
         console.log('[7TV] Plugin unloaded');
@@ -2636,20 +2648,19 @@ export default class SevenTVPlugin extends Plugin {
      * 
      * @param twitchId - Numeric Twitch user identifier
      */
-	async refreshEmotesForUser(twitchId: string): Promise<void> {
-		this.logger.log(`Fetching emotes for Twitch ID: ${twitchId}`, 'basic');
-		const newEmoteMap = await fetchEmotesForTwitchId(twitchId);
-		
-		if (newEmoteMap.size <= 2) {
-			throw new Error(`Only found ${newEmoteMap.size} emotes for user ${twitchId}. Expected more than 2 emotes.`);
-		}
-		
-		this.emoteSuggest.updateEmoteMap(newEmoteMap);
-		this.logger.log(`Loaded ${newEmoteMap.size} emotes`, 'basic');
-		
-		// Reset pre-cache status
-		this.preCacheComplete = false;
-	}
+    async refreshEmotesForUser(twitchId: string): Promise<void> {
+        this.logger.log(`Fetching emotes for Twitch ID: ${twitchId}`, 'basic');
+        const newEmoteMap = await fetchEmotesForTwitchId(twitchId);
+        
+        if (newEmoteMap.size <= 2) {
+            throw new Error(`Only found ${newEmoteMap.size} emotes for user ${twitchId}. Expected more than 2 emotes.`);
+        }
+        
+        this.emoteSuggest.updateEmoteMap(newEmoteMap);
+        this.logger.log(`Loaded ${newEmoteMap.size} emotes`, 'basic');
+        
+        this.preCacheComplete = false;
+    }
 
     /**
      * Routes emote insertion to appropriate method based on cache strategy.
@@ -2685,35 +2696,30 @@ export default class SevenTVPlugin extends Plugin {
     }
 
     /**
-     * Inserts emote using local cache if available, otherwise uses CDN with background caching.
+        /**
+     * Inserts emote using local cache when available, otherwise falls back to 7TV CDN.
+     * Automatically caches emotes in the background on first use for future access.
      * 
-     * @param editor - Active Obsidian editor instance
-     * @param name - Emote display name
-     * @param id - 7TV emote identifier
+     * 
+     * @param editor - Active Obsidian editor instance where emote should be inserted
+     * @param name - Display name of the emote for alt text and title attributes
+     * @param id - 7TV emote identifier used for cache lookup and CDN URL construction
      */
-    private async insertWithOnDemandCache(editor: Editor, name: string, id: string): Promise<void> {
-        const cachePath = `${this.CACHE_DIR}/${id}.webp`;
-        const cdnUrl = `https://cdn.7tv.app/emote/${id}/1x.webp`;
-        
-        // Time the cache check for performance monitoring
-        const checkResult = await this.logger.withTiming(
-            `Cache check for ${name}`,
-            async () => {
-                return await this.app.vault.adapter.exists(cachePath);
-            }
-        );
-        
-        if (checkResult) {
-            const html = `<span class="seven-tv-emote" title=":${name}:"><img src="./${cachePath}" alt="${name}" style="display:inline-block;height:1.5em;vertical-align:middle;"></span>`;
-            this.logger.log(`Emote "${name}" (${id}) inserted from LOCAL CACHE (on-demand strategy)`, 'debug');
-            editor.replaceSelection(html);
-        } else {
-            const html = `<span class="seven-tv-emote" title=":${name}:"><img src="${cdnUrl}" alt="${name}" style="display:inline-block;height:1.5em;vertical-align:middle;"></span>`;
-            this.logger.log(`Emote "${name}" (${id}) inserted from CDN, will cache (on-demand strategy)`, 'debug');
-            editor.replaceSelection(html);
-            // Cache in background for future use
-            this.downloadToCache(id, cdnUrl, cachePath).catch(() => { });
-        }
+	private async insertWithOnDemandCache(editor: Editor, name: string, id: string): Promise<void> {
+		const cachePath = `${this.CACHE_DIR}/${id}.webp`;
+		const cdnUrl = `https://cdn.7tv.app/emote/${id}/1x.webp`;
+		
+		const isCached = await this.app.vault.adapter.exists(cachePath);
+		
+		// Use CDN URL with cache fallback in onerror
+		const html = `<img src="${cdnUrl}" alt="${name}" title=":${name}:" style="height:1.5em;vertical-align:middle" onerror="this.src=this.src.replace('cdn.7tv.app/emote','_7tv-emotes-cache').replace('/1x.webp','.webp')">`;
+		
+		if (!isCached) {
+			// Cache in background for fallback availability
+			this.downloadToCache(id, cdnUrl, cachePath).catch(() => { });
+		}
+		
+		editor.replaceSelection(html);
     }
 
     /**
@@ -2742,12 +2748,12 @@ export default class SevenTVPlugin extends Plugin {
     }
 
     /**
-     * Checks if emotes beyond the default HUH emote have been loaded.
+     * Checks if any emotes have been loaded.
      * 
-     * @returns Boolean indicating if additional emotes are loaded
+     * @returns Boolean indicating if emotes are loaded
      */
     public hasLoadedEmotes(): boolean {
-        return this.getEmoteCount() > 1; // 1 for default HUH emote
+        return this.getEmoteCount() > 0;
     }
 
     /**
@@ -2757,18 +2763,16 @@ export default class SevenTVPlugin extends Plugin {
      */
     public async triggerPreCache(): Promise<void> {
         const emoteMap = this.getEmoteMap();
-        if (!emoteMap || emoteMap.size <= 1) { // 1 for default HUH emote
+        if (!emoteMap || emoteMap.size === 0) {
             throw new Error('No emotes loaded to cache');
         }
         
         this.logger.log('Starting manual pre-cache operation', 'basic');
         
-        // Cancel any existing pre-cache
         if (this.abortController) {
             this.abortController.abort();
         }
         
-        // Create new abort controller
         this.abortController = new AbortController();
         
         this.activeDownloadPromise = this.preCacheEmoteSet(emoteMap);
@@ -2801,28 +2805,22 @@ export default class SevenTVPlugin extends Plugin {
         
         this.logger.log(`Starting pre-cache of ${totalEmotes} emotes`, 'basic');
         
-        // Estimate total bytes (average emote is ~5KB)
-        const estimatedAverageSize = 5 * 1024; // 5KB average
+        const estimatedAverageSize = 5 * 1024;
         const estimatedTotalBytes = totalEmotes * estimatedAverageSize;
         
-        // Start progress tracking
         this.downloadTracker.start(totalEmotes, () => {
-            // Cancel callback
             if (this.abortController) {
                 this.abortController.abort();
             }
         });
         
-        // Set initial estimate
         this.downloadTracker.setTotalBytes(estimatedTotalBytes);
         
-        // Use smaller batch size
         const BATCH_SIZE = 3;
         const totalBatches = Math.ceil(totalEmotes / BATCH_SIZE);
         
         try {
             for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
-                // Check for cancellation
                 if (this.abortController?.signal.aborted || this.downloadTracker.isCancelledRequested()) {
                     throw new DOMException('Download cancelled', 'AbortError');
                 }
@@ -2831,10 +2829,8 @@ export default class SevenTVPlugin extends Plugin {
                 const endIdx = Math.min(startIdx + BATCH_SIZE, totalEmotes);
                 const batch = emoteIds.slice(startIdx, endIdx);
                 
-                // Update batch info
                 this.downloadTracker.updateBatch(batchIndex + 1);
                 
-                // Process batch in parallel
                 const promises = batch.map(id => 
                     this.ensureEmoteCached(id)
                         .then(bytes => this.downloadTracker.recordSuccess(bytes))
@@ -2843,7 +2839,6 @@ export default class SevenTVPlugin extends Plugin {
                 
                 await Promise.allSettled(promises);
                 
-                // Use requestIdleCallback to yield to browser rendering
                 await new Promise(resolve => {
                     if ('requestIdleCallback' in window) {
                         (window as any).requestIdleCallback(() => resolve(null), { timeout: 100 });
@@ -2852,14 +2847,12 @@ export default class SevenTVPlugin extends Plugin {
                     }
                 });
                 
-                // Log progress every 10% or every 5 batches
                 if (batchIndex % Math.max(1, Math.floor(totalBatches * 0.1)) === 0 || batchIndex % 5 === 0) {
                     const percent = Math.round((startIdx / totalEmotes) * 100);
                     this.logger.log(`Pre-cache progress: ${startIdx}/${totalEmotes} (${percent}%)`, 'verbose');
                 }
             }
             
-            // Complete progress tracking
             this.downloadTracker.complete();
             this.logger.log('Pre-cache completed', 'basic');
             
@@ -2918,7 +2911,7 @@ export default class SevenTVPlugin extends Plugin {
             return bytes;
         } catch (error) {
             if (error.name === 'AbortError') {
-                throw error; // Re-throw abort errors
+                throw error;
             }
             this.logger.warn(`Cache download failed for ${emoteId}: ${error}`);
             throw error;
@@ -3075,7 +3068,7 @@ class PluginLogger {
  */
 class EmoteSuggest extends EditorSuggest<string> {
     /** Internal mapping of emote names to 7TV IDs */
-    private emoteMap: Map<string, string> = new Map([['HUH', '01FFMS6Q4G0009CAK0J14692AY']]);
+    private emoteMap: Map<string, string> = new Map();
     
     /** Reference to main plugin instance */
     private plugin: SevenTVPlugin;
@@ -3291,18 +3284,12 @@ class EnhancedSettingTab extends PluginSettingTab {
         
         this.renderRequestId = requestAnimationFrame(async () => {
             try {
-                // ======================
-                // HEADER SECTION
-                // ======================
                 containerEl.createEl('h2', { text: '7TV Emotes' });
                 containerEl.createEl('p', { 
                     text: 'Integrate 7TV (Twitch) emotes into your notes with auto-complete suggestions.',
                     cls: 'setting-item-description'
                 });
 
-                // ======================
-                // STREAMER SELECTION
-                // ======================
                 containerEl.createEl('h3', { text: 'Streamer Selection' });
                 containerEl.createEl('p', { 
                     text: 'Choose from popular streamers or enter a Twitch ID directly.',
@@ -3318,7 +3305,6 @@ class EnhancedSettingTab extends PluginSettingTab {
                 buttonContainer.style.gap = '8px';
                 buttonContainer.style.alignItems = 'center';
                 
-                // Search button for streamer selection
                 const button = buttonContainer.createEl('button');
                 button.addClass('mod-cta');
                 button.style.flex = '1';
@@ -3346,7 +3332,6 @@ class EnhancedSettingTab extends PluginSettingTab {
                     }
                 });
                 
-                // Manual Twitch ID input
                 const manualInput = buttonContainer.createEl('input');
                 manualInput.type = 'text';
                 manualInput.placeholder = 'Twitch ID';
@@ -3382,7 +3367,6 @@ class EnhancedSettingTab extends PluginSettingTab {
                     }, 800);
                 });
                 
-                // Clear selection button
                 if (this.plugin.settings.selectedStreamerId || this.plugin.settings.twitchUserId) {
                     const clearButton = streamerSetting.controlEl.createEl('button');
                     clearButton.textContent = 'Clear';
@@ -3399,20 +3383,15 @@ class EnhancedSettingTab extends PluginSettingTab {
                     });
                 }
 
-                // ======================
-                // CACHE SETTINGS
-                // ======================
                 containerEl.createEl('h3', { text: 'Cache Settings' });
                 containerEl.createEl('p', { 
                     text: 'Control how emote images are stored on your device.',
                     cls: 'setting-item-description'
                 });
 
-                // Cache strategy selection via radio buttons
                 const cacheContainer = containerEl.createDiv();
                 cacheContainer.style.marginBottom = '16px';
                 
-                // On-Demand Cache option (Default)
                 const onDemandOption = cacheContainer.createDiv();
                 onDemandOption.style.display = 'flex';
                 onDemandOption.style.alignItems = 'flex-start';
@@ -3454,7 +3433,6 @@ class EnhancedSettingTab extends PluginSettingTab {
                     }
                 });
                 
-                // No Cache option
                 const noCacheOption = cacheContainer.createDiv();
                 noCacheOption.style.display = 'flex';
                 noCacheOption.style.alignItems = 'flex-start';
@@ -3495,7 +3473,6 @@ class EnhancedSettingTab extends PluginSettingTab {
                     }
                 });
                 
-                // Cache action buttons container
                 const actionContainer = containerEl.createDiv();
                 actionContainer.style.display = 'grid';
                 actionContainer.style.gridTemplateColumns = '1fr 1fr';
@@ -3503,7 +3480,6 @@ class EnhancedSettingTab extends PluginSettingTab {
                 actionContainer.style.marginTop = '8px';
                 actionContainer.style.marginBottom = '24px';
 
-                // Pre-cache Now button
                 this.preCacheButton = actionContainer.createEl('button');
                 this.preCacheButton.textContent = 'Pre-cache Now';
                 this.preCacheButton.style.flex = '1';
@@ -3514,7 +3490,6 @@ class EnhancedSettingTab extends PluginSettingTab {
                         return;
                     }
                     
-                    // Use public method to get emote count
                     const emoteCount = this.plugin.getEmoteCount();
                     const estimatedSizeMB = ((emoteCount * 5) / 1024).toFixed(1);
                     
@@ -3525,14 +3500,13 @@ class EnhancedSettingTab extends PluginSettingTab {
                         try {
                             await this.plugin.triggerPreCache();
                             this.updateStatus();
-                            this.updateActionButtons(); // Update cancel button state
+                            this.updateActionButtons();
                         } catch (error) {
                             new Notice(`Failed to start pre-cache: ${error.message}`);
                         }
                     }
                 });
 
-                // Cancel Pre-cache button
                 this.cancelPreCacheButton = actionContainer.createEl('button');
                 this.cancelPreCacheButton.textContent = 'Cancel Pre-cache';
                 this.cancelPreCacheButton.className = 'mod-warning';
@@ -3546,7 +3520,6 @@ class EnhancedSettingTab extends PluginSettingTab {
                     }
                 });
 
-                // Clear Cache button
                 this.clearCacheButton = containerEl.createEl('button');
                 this.clearCacheButton.textContent = 'Clear Cache';
                 this.clearCacheButton.style.width = '100%';
@@ -3565,8 +3538,8 @@ class EnhancedSettingTab extends PluginSettingTab {
                             const cacheDir = this.plugin.getCacheDir();
                             if (await this.plugin.app.vault.adapter.exists(cacheDir)) {
                                 await this.plugin.app.vault.adapter.rmdir(cacheDir, true);
-                                await this.plugin.ensureCacheInitialized(); // Use public method
-                                this.plugin.resetPreCacheStatus(); // Use public method
+                                await this.plugin.ensureCacheInitialized();
+                                this.plugin.resetPreCacheStatus();
                                 await this.updateCacheStats();
                                 new Notice('Cache cleared successfully');
                                 console.log('[7TV] Cache cleared');
@@ -3579,9 +3552,6 @@ class EnhancedSettingTab extends PluginSettingTab {
                     }
                 });
 
-                // ======================
-                // STATUS SECTION
-                // ======================
                 containerEl.createEl('h3', { text: 'Status' });
                 
                 this.statusDiv = containerEl.createDiv();
@@ -3592,22 +3562,17 @@ class EnhancedSettingTab extends PluginSettingTab {
                 this.statusDiv.style.border = '1px solid var(--background-modifier-border)';
                 this.statusDiv.style.fontSize = '0.9em';
                 
-                // Update cache stats and status display
                 await this.updateCacheStats();
                 this.updateStatus();
                 this.updateRadioButtons();
                 this.updateActionButtons();
 
-                // ======================
-                // ADVANCED SETTINGS
-                // ======================
                 containerEl.createEl('h3', { text: 'Advanced' });
                 containerEl.createEl('p', { 
                     text: 'Settings for debugging and troubleshooting.',
                     cls: 'setting-item-description'
                 });
 
-                // Log level dropdown (moved to bottom)
                 new Setting(containerEl)
                     .setName('Log Level')
                     .setDesc('Controls console output. Only change if debugging issues.')
@@ -3689,11 +3654,9 @@ class EnhancedSettingTab extends PluginSettingTab {
         const isOnDemand = this.plugin.settings.cacheStrategy === 'on-demand';
         const isNoCache = this.plugin.settings.cacheStrategy === 'no-cache';
         
-        // Update On-Demand radio button
         this.onDemandRadio.style.background = isOnDemand ? 'var(--interactive-accent)' : 'transparent';
         this.onDemandRadio.style.borderColor = isOnDemand ? 'var(--interactive-accent)' : 'var(--text-muted)';
         
-        // Update No Cache radio button
         this.noCacheRadio.style.background = isNoCache ? 'var(--interactive-accent)' : 'transparent';
         this.noCacheRadio.style.borderColor = isNoCache ? 'var(--interactive-accent)' : 'var(--text-muted)';
     }
@@ -3708,16 +3671,10 @@ class EnhancedSettingTab extends PluginSettingTab {
         const hasEmotes = this.plugin.hasLoadedEmotes();
         const isPreCaching = this.plugin.isPreCaching();
         
-        // Pre-cache button
         this.preCacheButton.disabled = isNoCache || !hasEmotes;
-        
-        // Cancel pre-cache button
         this.cancelPreCacheButton.disabled = !isPreCaching;
-        
-        // Clear cache button
         this.clearCacheButton.disabled = isNoCache;
         
-        // Visual feedback for disabled buttons
         if (this.preCacheButton.disabled) {
             this.preCacheButton.style.opacity = '0.5';
             this.preCacheButton.style.cursor = 'not-allowed';
@@ -3753,7 +3710,6 @@ class EnhancedSettingTab extends PluginSettingTab {
             const activeId = this.plugin.getActiveTwitchId();
             const activeStreamer = this.plugin.settings.selectedStreamerId;
             const streamerName = activeStreamer ? STREAMER_DISPLAY_MAP.get(activeStreamer) : null;
-            // Use public method to get emote count
             const emoteCount = this.plugin.getEmoteCount();
             const isPreCaching = this.plugin.isPreCaching();
             const preCacheStatus = this.plugin.isPreCacheComplete() ? 'Complete' : isPreCaching ? 'In Progress' : 'Not Started';
@@ -3797,12 +3753,10 @@ class EnhancedSettingTab extends PluginSettingTab {
                 `;
             }
             
-            // Fixed: Use innerHTML property correctly
             if (this.statusDiv) {
                 this.statusDiv.innerHTML = statusHTML;
             }
             
-            // Also update action buttons in case pre-cache status changed
             this.updateActionButtons();
         });
     }
@@ -3838,7 +3792,7 @@ class EnhancedSettingTab extends PluginSettingTab {
                 await this.plugin.refreshEmotesForUser(twitchId);
                 await this.updateCacheStats();
                 this.updateStatus();
-                this.updateActionButtons(); // Update pre-cache button availability
+                this.updateActionButtons();
                 new Notice(`${displayName}'s emotes loaded`);
             } catch (error) {
                 console.error('[7TV] Failed to load emotes:', error);
@@ -3861,7 +3815,6 @@ class EnhancedSettingTab extends PluginSettingTab {
             this.debounceTimer = null;
         }
         
-        // Clear element references
         this.onDemandRadio = null;
         this.noCacheRadio = null;
         this.preCacheButton = null;
@@ -3946,25 +3899,20 @@ class StreamerSuggestModal extends FuzzySuggestModal<string> {
         const displayName = STREAMER_DISPLAY_MAP.get(item) || item;
         const twitchId = STREAMER_ID_MAP.get(item) || 'Unknown ID';
         
-        // Main container with horizontal layout
         const container = el.createDiv({ cls: 'seven-tv-streamer-suggestion-container' });
         
-        // Left section: Vertical stack of streamer information
         const infoSection = container.createDiv({ cls: 'seven-tv-streamer-info-section' });
         
-        // Streamer name (primary text, bold)
         infoSection.createDiv({ 
             cls: 'seven-tv-streamer-suggestion-name',
             text: displayName
         });
         
-        // Twitch ID (secondary text, smaller and muted)
         infoSection.createDiv({ 
             cls: 'seven-tv-streamer-suggestion-id',
             text: `Twitch ID: ${twitchId}`
         });
         
-        // Right section: Selection indicator (only shown if currently selected)
         if (this.plugin.settings.selectedStreamerId === item) {
             container.createDiv({ 
                 text: '✓ Selected', 
@@ -3982,7 +3930,7 @@ class StreamerSuggestModal extends FuzzySuggestModal<string> {
  * Fetches 7TV emote set for a given Twitch user ID.
  * 
  * Implements 7TV API v3 integration with error handling and timeout protection.
- * Always includes HUH emote as a reliable fallback.
+ * Returns empty map when no emotes are found.
  * 
  * @param twitchId - Numeric Twitch user identifier
  * @returns Promise resolving to map of emote names to 7TV IDs
@@ -3991,13 +3939,10 @@ class StreamerSuggestModal extends FuzzySuggestModal<string> {
  */
 async function fetchEmotesForTwitchId(twitchId: string): Promise<Map<string, string>> {
     const emoteMap = new Map<string, string>();
-    // Always include HUH as a reliable fallback emote
-    emoteMap.set('HUH', '01FFMS6Q4G0009CAK0J14692AY');
     
     try {
         console.log(`[7TV] Fetching 7TV emotes for Twitch ID: ${twitchId}`);
         
-        // Fetch user data to get emote set ID
         const userRes = await fetch(`https://7tv.io/v3/users/twitch/${encodeURIComponent(twitchId)}`);
         if (!userRes.ok) throw new Error(`HTTP ${userRes.status}`);
         const userData = await userRes.json();
@@ -4008,12 +3953,10 @@ async function fetchEmotesForTwitchId(twitchId: string): Promise<Map<string, str
         
         console.log(`[7TV] Found emote set ID: ${emoteSetId}`);
         
-        // Fetch emote set data
         const setRes = await fetch(`https://7tv.io/v3/emote-sets/${encodeURIComponent(emoteSetId)}`);
         if (!setRes.ok) throw new Error(`HTTP ${setRes.status}`);
         const setData = await setRes.json();
         
-        // Extract emotes from set data
         if (setData?.emotes && Array.isArray(setData.emotes)) {
             console.log(`[7TV] Processing ${setData.emotes.length} emotes from set`);
             setData.emotes.forEach((emote: any) => {
