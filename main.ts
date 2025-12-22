@@ -62,7 +62,7 @@ const DEFAULT_SETTINGS: SevenTVSettings = {
  *   - Internal key for plugin state management
  */
 const BUILT_IN_STREAMERS: Array<[string, string, string]> = [
-    ['10000DAYS', '43414943', '10000days'],
+	['10000DAYS', '43414943', '10000days'],
     ['1DrakoNz', '118787650', '1drakonz'],
     ['2mgovercsquared', '45177533', '2mgovercsquared'],
     ['2xnowel', '777695748', '2xnowel'],
@@ -517,7 +517,7 @@ const BUILT_IN_STREAMERS: Array<[string, string, string]> = [
     ['DougDoug', '31507411', 'dougdoug'],
     ['Douglassola', '157809310', 'douglassola'],
     ['DragonSunshine', 'ERROR', 'dragon_sunshine_'],
-    ['Drakeoffc', '231922983', 'drakeoffc'],
+    ['Drakeoffc', '231922983',  'drakeoffc'],
     ['Drb7h', '208308607', 'drb7h'],
     ['DrDisrespect', 'ERROR', 'drdisrespect'],
     ['DreadzTV', '31089858', 'dreadztv'],
@@ -2366,6 +2366,123 @@ class DownloadProgressTracker {
 }
 
 // =====================================================================
+// PLUGIN LOGGER - FIXED VERSION
+// =====================================================================
+
+/**
+ * Configurable logging utility with verbosity levels.
+ * 
+ * Provides filtered console output with performance timing capabilities
+ * for debugging and operational monitoring.
+ */
+class PluginLogger {
+    private plugin: SevenTVPlugin;
+    private defaultLogLevel: 'none' | 'basic' | 'verbose' | 'debug' = 'basic';
+
+    /**
+     * Creates logger instance bound to plugin.
+     * 
+     * @param plugin - Parent plugin instance for settings access
+     */
+    constructor(plugin: SevenTVPlugin) {
+        this.plugin = plugin;
+    }
+
+    /**
+     * Main logging method with level-based filtering.
+     * 
+     * @param message - Text to output to console
+     * @param level - Minimum verbosity level required for output
+     */
+    log(message: string, level: 'none' | 'basic' | 'verbose' | 'debug' = 'basic'): void {
+        const currentLevel = this.getLogLevel();
+        
+        // Map levels to numeric values for comparison
+        const levelValues = {
+            'none': 0,
+            'basic': 1,
+            'verbose': 2,
+            'debug': 3
+        };
+        
+        const currentValue = levelValues[currentLevel as keyof typeof levelValues] || 0;
+        const messageValue = levelValues[level] || 0;
+        
+        // Only log if current level is equal or higher than message level
+        // AND current level is not 'none' (0)
+        if (currentValue >= messageValue && currentValue > 0) {
+            console.log(`[7TV] ${message}`);
+        }
+    }
+
+    /**
+     * Safely retrieves current log level with fallback handling.
+     * 
+     * @returns Current log level or default if settings unavailable
+     */
+    private getLogLevel(): string {
+        try {
+            if (!this.plugin || !this.plugin.settings) {
+                return this.defaultLogLevel;
+            }
+            return this.plugin.settings.logLevel || this.defaultLogLevel;
+        } catch (error) {
+            return this.defaultLogLevel;
+        }
+    }
+
+    /**
+     * Wraps async operations with performance timing when debug logging enabled.
+     * 
+     * @param operation - Descriptive name of operation being timed
+     * @param callback - Async function to execute and time
+     * @returns Promise resolving to callback result
+     */
+    async withTiming<T>(operation: string, callback: () => Promise<T>): Promise<T> {
+        const currentLevel = this.getLogLevel();
+        if (currentLevel === 'debug') {
+            const startTime = performance.now();
+            try {
+                const result = await callback();
+                const duration = performance.now() - startTime;
+                this.log(`${operation} completed in ${duration.toFixed(1)}ms`, 'debug');
+                return result;
+            } catch (error) {
+                const duration = performance.now() - startTime;
+                this.log(`${operation} failed after ${duration.toFixed(1)}ms: ${error}`, 'debug');
+                throw error;
+            }
+        } else {
+            return callback();
+        }
+    }
+
+    /**
+     * Outputs warning messages unless logging is disabled.
+     * 
+     * @param message - Warning text to display
+     */
+    warn(message: string): void {
+        const currentLevel = this.getLogLevel();
+        if (currentLevel !== 'none') {
+            console.warn(`[7TV] ${message}`);
+        }
+    }
+
+    /**
+     * Outputs error messages unless logging is disabled.
+     * 
+     * @param message - Error text to display
+     */
+    error(message: string): void {
+        const currentLevel = this.getLogLevel();
+        if (currentLevel !== 'none') {
+            console.error(`[7TV] ${message}`);
+        }
+    }
+}
+
+// =====================================================================
 // MAIN PLUGIN CLASS
 // =====================================================================
 
@@ -2456,6 +2573,7 @@ export default class SevenTVPlugin extends Plugin {
         if (this.logger) {
             this.logger.log(message, level);
         } else {
+            // Fallback if logger not initialized yet
             console.log(`[7TV] ${message}`);
         }
     }
@@ -2483,10 +2601,18 @@ export default class SevenTVPlugin extends Plugin {
      * suggestions, and loads any pre-configured emote sets.
      */
     async onload() {
-        console.time('[7TV] Plugin initialization');
+		await this.loadSettings();
+
+        // Only use console.time if debug logging is enabled
+        if (this.settings.logLevel === 'debug') {
+            console.time('[7TV] Plugin initialization');
+        }
         
-        await this.loadSettings();
-        console.timeLog('[7TV] Plugin initialization', 'Settings loaded');
+        
+        // Only log timing if debug is enabled
+        if (this.settings.logLevel === 'debug') {
+            console.timeLog('[7TV] Plugin initialization', 'Settings loaded');
+        }
         
         this.logger = new PluginLogger(this);
         this.logger.log('Plugin initialization started', 'basic');
@@ -2495,23 +2621,36 @@ export default class SevenTVPlugin extends Plugin {
         
         this.injectStyles();
         this.logger.log('CSS injected', 'verbose');
-        console.timeLog('[7TV] Plugin initialization', 'CSS injected');
+        
+        if (this.settings.logLevel === 'debug') {
+            console.timeLog('[7TV] Plugin initialization', 'CSS injected');
+        }
         
         if (this.settings.cacheStrategy !== 'no-cache') {
             await this.initializeCache();
             this.logger.log(`Cache initialized (strategy: ${this.settings.cacheStrategy})`, 'verbose');
-            console.timeLog('[7TV] Plugin initialization', 'Cache initialized');
+            
+            if (this.settings.logLevel === 'debug') {
+                console.timeLog('[7TV] Plugin initialization', 'Cache initialized');
+            }
         }
         
         this.emoteSuggest = new EmoteSuggest(this.app, this);
         this.registerEditorSuggest(this.emoteSuggest);
         this.logger.log('Emote suggest registered', 'verbose');
-        console.timeLog('[7TV] Plugin initialization', 'Emote suggest registered');
+        
+        if (this.settings.logLevel === 'debug') {
+            console.timeLog('[7TV] Plugin initialization', 'Emote suggest registered');
+        }
         
         const activeId = this.getActiveTwitchId();
         if (activeId) {
             this.logger.log(`Loading emotes for ID: ${activeId}`, 'basic');
-            console.timeLog('[7TV] Plugin initialization', `Loading emotes for ID: ${activeId}`);
+            
+            if (this.settings.logLevel === 'debug') {
+                console.timeLog('[7TV] Plugin initialization', `Loading emotes for ID: ${activeId}`);
+            }
+            
             await this.refreshEmotesForUser(activeId);
         }
         
@@ -2531,7 +2670,11 @@ export default class SevenTVPlugin extends Plugin {
         
         this.addSettingTab(new EnhancedSettingTab(this.app, this));
         
-        console.timeEnd('[7TV] Plugin initialization');
+        // Only end timing if debug is enabled
+        if (this.settings.logLevel === 'debug') {
+            console.timeEnd('[7TV] Plugin initialization');
+        }
+        
         this.logger.log('Plugin loaded successfully', 'basic');
     }
 
@@ -2629,16 +2772,20 @@ export default class SevenTVPlugin extends Plugin {
      */
     onunload() {
         if (this.activeDownloadPromise) {
-            console.log('[7TV] Active download operation cancelled on unload');
+            this.logger.log('Active download operation cancelled on unload', 'verbose');
         }
         
         if (this.abortController) {
             this.abortController.abort();
         }
+
+		if (this.downloadTracker) {
+        	this.downloadTracker.cleanup();
+    	}
         
         this.downloadTracker.cleanup();
         
-        console.log('[7TV] Plugin unloaded');
+        this.logger.log('Plugin unloaded', 'basic');
     }
 
     /**
@@ -2696,10 +2843,8 @@ export default class SevenTVPlugin extends Plugin {
     }
 
     /**
-        /**
      * Inserts emote using local cache when available, otherwise falls back to 7TV CDN.
      * Automatically caches emotes in the background on first use for future access.
-     * 
      * 
      * @param editor - Active Obsidian editor instance where emote should be inserted
      * @param name - Display name of the emote for alt text and title attributes
@@ -2712,7 +2857,7 @@ export default class SevenTVPlugin extends Plugin {
 		const isCached = await this.app.vault.adapter.exists(cachePath);
 		
 		// Use CDN URL with cache fallback in onerror
-		const html = `<img src="${cdnUrl}" alt="${name}" title=":${name}:" style="height:1.5em;vertical-align:middle" onerror="this.src=this.src.replace('cdn.7tv.app/emote','_7tv-emotes-cache').replace('/1x.webp','.webp')">`;
+		const html = `<img src="${cdnUrl}" alt="${name}" title=":${name}:" style="display: inline-block;height:1.5em;vertical-align:middle" onerror="this.src=this.src.replace('cdn.7tv.app/emote','_7tv-emotes-cache').replace('/1x.webp','.webp')">`;
 		
 		if (!isCached) {
 			// Cache in background for fallback availability
@@ -2805,7 +2950,8 @@ export default class SevenTVPlugin extends Plugin {
         
         this.logger.log(`Starting pre-cache of ${totalEmotes} emotes`, 'basic');
         
-        const estimatedAverageSize = 5 * 1024;
+        // FIX: Updated from 5KB to 50KB for more accurate 7TV emote size estimation
+        const estimatedAverageSize = 50 * 1024; // 50KB - average for 7TV WebP emotes
         const estimatedTotalBytes = totalEmotes * estimatedAverageSize;
         
         this.downloadTracker.start(totalEmotes, () => {
@@ -2950,110 +3096,7 @@ export default class SevenTVPlugin extends Plugin {
     async saveSettings() {
         await this.saveData(this.settings);
     }
-}
-
-// =====================================================================
-// PLUGIN LOGGER
-// =====================================================================
-
-/**
- * Configurable logging utility with verbosity levels.
- * 
- * Provides filtered console output with performance timing capabilities
- * for debugging and operational monitoring.
- */
-class PluginLogger {
-    private plugin: SevenTVPlugin;
-    private defaultLogLevel: 'basic' | 'verbose' | 'debug' = 'basic';
-
-    /**
-     * Creates logger instance bound to plugin.
-     * 
-     * @param plugin - Parent plugin instance for settings access
-     */
-    constructor(plugin: SevenTVPlugin) {
-        this.plugin = plugin;
-    }
-
-    /**
-     * Main logging method with level-based filtering.
-     * 
-     * @param message - Text to output to console
-     * @param level - Minimum verbosity level required for output
-     */
-    log(message: string, level: 'basic' | 'verbose' | 'debug' = 'basic'): void {
-        const currentLevel = this.getLogLevel();
-        const levels = ['none', 'basic', 'verbose', 'debug'];
-        
-        if (levels.indexOf(currentLevel) >= levels.indexOf(level)) {
-            console.log(`[7TV] ${message}`);
-        }
-    }
-
-    /**
-     * Safely retrieves current log level with fallback handling.
-     * 
-     * @returns Current log level or default if settings unavailable
-     */
-    private getLogLevel(): string {
-        try {
-            if (!this.plugin || !this.plugin.settings) {
-                return this.defaultLogLevel;
-            }
-            return this.plugin.settings.logLevel || this.defaultLogLevel;
-        } catch (error) {
-            return this.defaultLogLevel;
-        }
-    }
-
-    /**
-     * Wraps async operations with performance timing when debug logging enabled.
-     * 
-     * @param operation - Descriptive name of operation being timed
-     * @param callback - Async function to execute and time
-     * @returns Promise resolving to callback result
-     */
-    async withTiming<T>(operation: string, callback: () => Promise<T>): Promise<T> {
-        if (this.getLogLevel() === 'debug') {
-            const startTime = performance.now();
-            try {
-                const result = await callback();
-                const duration = performance.now() - startTime;
-                this.log(`${operation} completed in ${duration.toFixed(1)}ms`, 'debug');
-                return result;
-            } catch (error) {
-                const duration = performance.now() - startTime;
-                this.log(`${operation} failed after ${duration.toFixed(1)}ms: ${error}`, 'debug');
-                throw error;
-            }
-        } else {
-            return callback();
-        }
-    }
-
-    /**
-     * Outputs warning messages unless logging is disabled.
-     * 
-     * @param message - Warning text to display
-     */
-    warn(message: string): void {
-        const currentLevel = this.getLogLevel();
-        if (currentLevel !== 'none') {
-            console.warn(`[7TV] ${message}`);
-        }
-    }
-
-    /**
-     * Outputs error messages unless logging is disabled.
-     * 
-     * @param message - Error text to display
-     */
-    error(message: string): void {
-        const currentLevel = this.getLogLevel();
-        if (currentLevel !== 'none') {
-            console.error(`[7TV] ${message}`);
-        }
-    }
+	
 }
 
 // =====================================================================
@@ -3091,7 +3134,7 @@ class EmoteSuggest extends EditorSuggest<string> {
      */
     updateEmoteMap(newMap: Map<string, string>): void {
         this.emoteMap = new Map(newMap);
-        console.log(`[7TV] Emote map updated with ${newMap.size} emotes`);
+        this.plugin.logMessage(`Emote map updated with ${newMap.size} emotes`, 'verbose');
     }
 
     /**
@@ -3120,7 +3163,7 @@ class EmoteSuggest extends EditorSuggest<string> {
             const query = match[1];
             const startPos = cursor.ch - fullMatch.length;
             
-            console.log(`[7TV] Emote search triggered: "${query}"`);
+            this.plugin.logMessage(`Emote search triggered: "${query}"`, 'verbose');
             
             return {
                 start: { line: cursor.line, ch: Math.max(0, startPos) },
@@ -3143,7 +3186,7 @@ class EmoteSuggest extends EditorSuggest<string> {
             .filter(name => name.toLowerCase().includes(query))
             .slice(0, 25);
         
-        console.log(`[7TV] Found ${matches.length} emotes matching "${context.query}"`);
+        this.plugin.logMessage(`Found ${matches.length} emotes matching "${context.query}"`, 'verbose');
         
         return matches;
     }
@@ -3188,7 +3231,7 @@ class EmoteSuggest extends EditorSuggest<string> {
         const emoteId = this.emoteMap.get(value);
         if (!emoteId) return;
         
-        console.log(`[7TV] Selected emote: "${value}" (ID: ${emoteId})`);
+        this.plugin.logMessage(`Selected emote: "${value}" (ID: ${emoteId})`, 'verbose');
         
         const typedRange = editor.getRange(this.context.start, this.context.end);
         const hasTrailingColon = typedRange.endsWith(':');
@@ -3267,7 +3310,7 @@ class EnhancedSettingTab extends PluginSettingTab {
      */
     async display(): Promise<void> {
         if (this.isDisplaying) {
-            console.log('[7TV] Settings tab display already in progress, cancelling duplicate');
+            this.plugin.logMessage('Settings tab display already in progress, cancelling duplicate', 'debug');
             return;
         }
         
@@ -3277,7 +3320,11 @@ class EnhancedSettingTab extends PluginSettingTab {
         }
         
         this.isDisplaying = true;
-        console.time('[7TV] Settings render');
+        
+        // Only log timing if debug is enabled
+        if (this.plugin.settings.logLevel === 'debug') {
+            console.time('[7TV] Settings render');
+        }
         
         const { containerEl } = this;
         containerEl.empty();
@@ -3353,14 +3400,14 @@ class EnhancedSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                         
                         if (/^\d{6,}$/.test(value)) {
-                            console.log(`[7TV] Auto-fetching emotes for manual ID: ${value}`);
+                            this.plugin.logMessage(`Auto-fetching emotes for manual ID: ${value}`, 'verbose');
                             try {
                                 await this.plugin.refreshEmotesForUser(value);
                                 await this.updateCacheStats();
                                 this.updateStatus();
                                 new Notice('Emotes loaded');
                             } catch (error) {
-                                console.error('[7TV] Failed to load emotes:', error);
+                                this.plugin.logMessage(`Failed to load emotes: ${error}`, 'verbose');
                                 new Notice('Failed to load emotes');
                             }
                         }
@@ -3378,7 +3425,7 @@ class EnhancedSettingTab extends PluginSettingTab {
                         updateButtonText();
                         manualInput.value = '';
                         new Notice('Selection cleared');
-                        console.log('[7TV] Streamer selection cleared');
+                        this.plugin.logMessage('Streamer selection cleared', 'verbose');
                         this.updateStatus();
                     });
                 }
@@ -3491,7 +3538,8 @@ class EnhancedSettingTab extends PluginSettingTab {
                     }
                     
                     const emoteCount = this.plugin.getEmoteCount();
-                    const estimatedSizeMB = ((emoteCount * 5) / 1024).toFixed(1);
+                    // FIX: Use more accurate size estimation (50KB per emote)
+                    const estimatedSizeMB = ((emoteCount * 50) / 1024).toFixed(1);
                     
                     const confirmMsg = `This will download all ${emoteCount} emotes (est. ${estimatedSizeMB}MB).\n\nThis may take a while. Continue?`;
                     
@@ -3542,12 +3590,12 @@ class EnhancedSettingTab extends PluginSettingTab {
                                 this.plugin.resetPreCacheStatus();
                                 await this.updateCacheStats();
                                 new Notice('Cache cleared successfully');
-                                console.log('[7TV] Cache cleared');
+                                this.plugin.logMessage('Cache cleared', 'verbose');
                                 this.updateStatus();
                             }
                         } catch (error) {
                             new Notice('Failed to clear cache');
-                            console.error('[7TV] Failed to clear cache:', error);
+                            this.plugin.logMessage(`Failed to clear cache: ${error}`, 'verbose');
                         }
                     }
                 });
@@ -3585,13 +3633,16 @@ class EnhancedSettingTab extends PluginSettingTab {
                         .onChange(async (value: any) => {
                             this.plugin.settings.logLevel = value;
                             await this.plugin.saveSettings();
-                            console.log(`[7TV] Log level changed to: ${value}`);
+                            this.plugin.logMessage(`Log level changed to: ${value}`, 'verbose');
                             this.updateStatus();
                         }));
                 
-                console.timeEnd('[7TV] Settings render');
+                if (this.plugin.settings.logLevel === 'debug') {
+                    console.timeEnd('[7TV] Settings render');
+                }
+                
             } catch (error) {
-                console.error('[7TV] Error rendering settings:', error);
+                this.plugin.logMessage(`Error rendering settings: ${error}`, 'verbose');
             } finally {
                 this.isDisplaying = false;
                 this.renderRequestId = null;
@@ -3626,7 +3677,7 @@ class EnhancedSettingTab extends PluginSettingTab {
                 this.cacheStats = { count: 0, size: 0 };
             }
         } catch (error) {
-            console.warn('[7TV] Failed to calculate cache stats:', error);
+            this.plugin.logMessage(`Failed to calculate cache stats: ${error}`, 'verbose');
             this.cacheStats = { count: 0, size: 0 };
         }
     }
@@ -3785,7 +3836,7 @@ class EnhancedSettingTab extends PluginSettingTab {
             updateButtonText();
             manualInput.value = twitchId;
             
-            console.log(`[7TV] Selected streamer: ${displayName} (ID: ${twitchId})`);
+            this.plugin.logMessage(`Selected streamer: ${displayName} (ID: ${twitchId})`, 'verbose');
             new Notice(`Fetching ${displayName}'s emotes...`);
             
             try {
@@ -3795,7 +3846,7 @@ class EnhancedSettingTab extends PluginSettingTab {
                 this.updateActionButtons();
                 new Notice(`${displayName}'s emotes loaded`);
             } catch (error) {
-                console.error('[7TV] Failed to load emotes:', error);
+                this.plugin.logMessage(`Failed to load emotes: ${error}`, 'verbose');
                 new Notice('Failed to load emotes');
             }
         }).open();
@@ -3824,7 +3875,7 @@ class EnhancedSettingTab extends PluginSettingTab {
         
         this.isDisplaying = false;
         super.hide();
-        console.log('[7TV] Settings tab hidden');
+        this.plugin.logMessage('Settings tab hidden', 'debug');
     }
 }
 
@@ -3941,7 +3992,10 @@ async function fetchEmotesForTwitchId(twitchId: string): Promise<Map<string, str
     const emoteMap = new Map<string, string>();
     
     try {
-        console.log(`[7TV] Fetching 7TV emotes for Twitch ID: ${twitchId}`);
+        // Use console.debug for internal logging that respects browser dev tools
+        if (window.console && console.debug) {
+            console.debug(`[7TV] Fetching 7TV emotes for Twitch ID: ${twitchId}`);
+        }
         
         const userRes = await fetch(`https://7tv.io/v3/users/twitch/${encodeURIComponent(twitchId)}`);
         if (!userRes.ok) throw new Error(`HTTP ${userRes.status}`);
@@ -3951,22 +4005,29 @@ async function fetchEmotesForTwitchId(twitchId: string): Promise<Map<string, str
             (userData?.emote_sets && userData.emote_sets[0]?.id);
         if (!emoteSetId) throw new Error('No emote set found');
         
-        console.log(`[7TV] Found emote set ID: ${emoteSetId}`);
+        if (window.console && console.debug) {
+            console.debug(`[7TV] Found emote set ID: ${emoteSetId}`);
+        }
         
         const setRes = await fetch(`https://7tv.io/v3/emote-sets/${encodeURIComponent(emoteSetId)}`);
         if (!setRes.ok) throw new Error(`HTTP ${setRes.status}`);
         const setData = await setRes.json();
         
         if (setData?.emotes && Array.isArray(setData.emotes)) {
-            console.log(`[7TV] Processing ${setData.emotes.length} emotes from set`);
+            if (window.console && console.debug) {
+                console.debug(`[7TV] Processing ${setData.emotes.length} emotes from set`);
+            }
             setData.emotes.forEach((emote: any) => {
                 if (emote.name && emote.id) {
                     emoteMap.set(emote.name, emote.id);
                 }
             });
-            console.log(`[7TV] Successfully mapped ${emoteMap.size} emotes`);
+            if (window.console && console.debug) {
+                console.debug(`[7TV] Successfully mapped ${emoteMap.size} emotes`);
+            }
         }
     } catch (error) {
+        // Always log errors regardless of log level
         console.error('[7TV] Failed to fetch 7TV emotes:', error);
     }
     
