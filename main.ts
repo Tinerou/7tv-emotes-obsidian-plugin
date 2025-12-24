@@ -2182,39 +2182,72 @@ class DownloadProgressTracker {
     private updateStatusBar(): void {
         if (!this.statusBarEl || !this.isActive) return;
         
+        // Clear existing content
+        this.statusBarEl.empty();
+        
         const elapsedSeconds = Math.floor((Date.now() - this.startTime) / 1000);
         const progress = this.totalEmotes > 0 ? (this.downloadedEmotes / this.totalEmotes) * 100 : 0;
         const speed = elapsedSeconds > 0 ? this.downloadedBytes / elapsedSeconds : 0;
         
-        this.statusBarEl.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                <strong>📥 7TV Emote Cache</strong>
-                <span style="font-size: 11px; color: var(--text-muted);">Batch ${this.currentBatch}/${this.totalBatches}</span>
-            </div>
-            <div style="margin-bottom: 4px;">
-                <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
-                    <span>Progress: ${this.downloadedEmotes}/${this.totalEmotes}</span>
-                    <span>${progress.toFixed(1)}%</span>
-                </div>
-                <div style="height: 4px; background: var(--background-modifier-border); border-radius: 2px; overflow: hidden; margin-bottom: 2px;">
-                    <div style="height: 100%; background: var(--interactive-accent); width: ${progress}%; transition: width 0.3s ease;"></div>
-                </div>
-                <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-muted); margin-bottom: 4px;">
-                    <span>${this.formatBytes(this.downloadedBytes)} / ${this.formatBytes(this.totalBytes)}</span>
-                    <span>${this.formatBytes(speed)}/s</span>
-                </div>
-            </div>
-            <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); align-items: center;">
-                <span>⏱️ ${elapsedSeconds}s</span>
-                <span>${this.failedEmotes > 0 ? `❌ ${this.failedEmotes} failed` : ''}</span>
-                <button class="mod-warning" style="padding: 2px 8px; font-size: 10px; height: auto; line-height: 1.2;">Cancel</button>
-            </div>
-        `;
+        // Header section
+        const headerContainer = this.statusBarEl.createDiv();
+        headerContainer.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;';
         
-        const cancelButton = this.statusBarEl.querySelector('button');
-        if (cancelButton) {
-            cancelButton.addEventListener('click', () => this.cancel());
+        const title = headerContainer.createEl('strong');
+        title.textContent = '📥 7TV Emote Cache';
+        
+        const batchInfo = headerContainer.createEl('span');
+        batchInfo.textContent = `Batch ${this.currentBatch}/${this.totalBatches}`;
+        batchInfo.style.cssText = 'font-size: 11px; color: var(--text-muted);';
+        
+        // Progress section
+        const progressContainer = this.statusBarEl.createDiv();
+        progressContainer.style.cssText = 'margin-bottom: 4px;';
+        
+        const progressHeader = progressContainer.createDiv();
+        progressHeader.style.cssText = 'display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;';
+        
+        const progressText = progressHeader.createEl('span');
+        progressText.textContent = `Progress: ${this.downloadedEmotes}/${this.totalEmotes}`;
+        
+        const progressPercent = progressHeader.createEl('span');
+        progressPercent.textContent = `${progress.toFixed(1)}%`;
+        
+        // Progress bar
+        const progressBarContainer = progressContainer.createDiv();
+        progressBarContainer.style.cssText = 'height: 4px; background: var(--background-modifier-border); border-radius: 2px; overflow: hidden; margin-bottom: 2px;';
+        
+        const progressBar = progressBarContainer.createDiv();
+        progressBar.style.cssText = `height: 100%; background: var(--interactive-accent); width: ${progress}%; transition: width 0.3s ease;`;
+        
+        // Size/speed info
+        const sizeInfo = progressContainer.createDiv();
+        sizeInfo.style.cssText = 'display: flex; justify-content: space-between; font-size: 10px; color: var(--text-muted); margin-bottom: 4px;';
+        
+        const sizeText = sizeInfo.createEl('span');
+        sizeText.textContent = `${this.formatBytes(this.downloadedBytes)} / ${this.formatBytes(this.totalBytes)}`;
+        
+        const speedText = sizeInfo.createEl('span');
+        speedText.textContent = `${this.formatBytes(speed)}/s`;
+        
+        // Footer section
+        const footer = this.statusBarEl.createDiv();
+        footer.style.cssText = 'display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); align-items: center;';
+        
+        const timer = footer.createEl('span');
+        timer.textContent = `⏱️ ${elapsedSeconds}s`;
+        
+        const failedInfo = footer.createEl('span');
+        if (this.failedEmotes > 0) {
+            failedInfo.textContent = `❌ ${this.failedEmotes} failed`;
         }
+        
+        // Cancel button
+        const cancelButton = footer.createEl('button');
+        cancelButton.textContent = 'Cancel';
+        cancelButton.addClass('mod-warning');
+        cancelButton.style.cssText = 'padding: 2px 8px; font-size: 10px; height: auto; line-height: 1.2;';
+        cancelButton.addEventListener('click', () => this.cancel());
     }
 
     /**
@@ -2232,26 +2265,22 @@ class DownloadProgressTracker {
         }
         
         if (this.statusBarEl) {
-            this.statusBarEl.innerHTML = `
-                <div style="text-align: center; padding: 8px;">
-                    <div style="font-weight: bold; color: var(--text-error); margin-bottom: 4px;">
-                        ❌ Download Cancelled
-                    </div>
-                    <div style="font-size: 11px; color: var(--text-muted);">
-                        ${this.downloadedEmotes - this.failedEmotes}/${this.totalEmotes} emotes cached
-                    </div>
-                    <div style="font-size: 10px; color: var(--text-faint); margin-top: 4px;">
-                        ${this.formatBytes(this.downloadedBytes)} downloaded
-                    </div>
-                </div>
-            `;
+            this.statusBarEl.empty();
             
-            window.setTimeout(() => {
-                if (this.statusBarEl && this.statusBarEl.parentNode) {
-                    this.statusBarEl.remove();
-                    this.statusBarEl = null;
-                }
-            }, 3000);
+            const container = this.statusBarEl.createDiv();
+            container.style.cssText = 'text-align: center; padding: 8px;';
+            
+            const title = container.createDiv();
+            title.style.cssText = 'font-weight: bold; color: var(--text-error); margin-bottom: 4px;';
+            title.textContent = '❌ Download Cancelled';
+            
+            const stats = container.createDiv();
+            stats.style.cssText = 'font-size: 11px; color: var(--text-muted);';
+            stats.textContent = `${this.downloadedEmotes - this.failedEmotes}/${this.totalEmotes} emotes cached`;
+            
+            const bytes = container.createDiv();
+            bytes.style.cssText = 'font-size: 10px; color: var(--text-faint); margin-top: 4px;';
+            bytes.textContent = `${this.formatBytes(this.downloadedBytes)} downloaded`;
         }
     }
 
@@ -2309,22 +2338,32 @@ class DownloadProgressTracker {
                 ((this.downloadedEmotes - this.failedEmotes) / this.totalEmotes * 100).toFixed(1) : '0';
             const avgSpeed = totalTime > 0 ? this.downloadedBytes / totalTime : 0;
             
-            this.statusBarEl.innerHTML = `
-                <div style="text-align: center; padding: 8px;">
-                    <div style="font-weight: bold; color: var(--text-accent); margin-bottom: 4px;">
-                        ✅ Download Complete
-                    </div>
-                    <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 2px;">
-                        ${this.downloadedEmotes - this.failedEmotes}/${this.totalEmotes} emotes cached
-                    </div>
-                    <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 4px;">
-                        ${this.formatBytes(this.downloadedBytes)} total
-                    </div>
-                    <div style="font-size: 9px; color: var(--text-faint);">
-                        ${successRate}% success in ${totalTime}s (${this.formatBytes(avgSpeed)}/s avg)
-                    </div>
-                </div>
-            `;
+            // Clear existing content
+            this.statusBarEl.empty();
+            
+            // Create main container
+            const container = this.statusBarEl.createDiv();
+            container.style.cssText = 'text-align: center; padding: 8px;';
+            
+            // Create title
+            const title = container.createDiv();
+            title.style.cssText = 'font-weight: bold; color: var(--text-accent); margin-bottom: 4px;';
+            title.textContent = '✅ Download Complete';
+            
+            // Create stats line 1
+            const stats1 = container.createDiv();
+            stats1.style.cssText = 'font-size: 11px; color: var(--text-muted); margin-bottom: 2px;';
+            stats1.textContent = `${this.downloadedEmotes - this.failedEmotes}/${this.totalEmotes} emotes cached`;
+            
+            // Create stats line 2
+            const stats2 = container.createDiv();
+            stats2.style.cssText = 'font-size: 10px; color: var(--text-muted); margin-bottom: 4px;';
+            stats2.textContent = `${this.formatBytes(this.downloadedBytes)} total`;
+            
+            // Create success rate line
+            const successRateEl = container.createDiv();
+            successRateEl.style.cssText = 'font-size: 9px; color: var(--text-faint);';
+            successRateEl.textContent = `${successRate}% success in ${totalTime}s (${this.formatBytes(avgSpeed)}/s avg)`;
             
             window.setTimeout(() => {
                 if (this.statusBarEl && this.statusBarEl.parentNode) {
@@ -3402,8 +3441,7 @@ class EnhancedSettingTab extends PluginSettingTab {
                             this.plugin.logMessage(`Auto-fetching emotes for manual ID: ${value}`, 'verbose');
                             try {
                                 await this.plugin.refreshEmotesForUser(value);
-                                await this.updateCacheStats();
-                                this.updateStatus();
+                                await this.updateStatus();
                                 new Notice('Emotes loaded');
                             } catch (error) {
                                 this.plugin.logMessage(`Failed to load emotes: ${error}`, 'verbose');
@@ -3425,7 +3463,7 @@ class EnhancedSettingTab extends PluginSettingTab {
                         manualInput.value = '';
                         new Notice('Selection cleared');
                         this.plugin.logMessage('Streamer selection cleared', 'verbose');
-                        this.updateStatus();
+                        await this.updateStatus();
                     });
                 }
 
@@ -3555,8 +3593,7 @@ class EnhancedSettingTab extends PluginSettingTab {
 							new Notice('Starting pre-cache...');
 							try {
 								await this.plugin.triggerPreCache();
-								this.updateStatus();
-								this.updateActionButtons();
+								await this.updateStatus();
 							} catch (error) {
 								new Notice(`Failed to start pre-cache: ${error.message}`);
 							}
@@ -3568,12 +3605,12 @@ class EnhancedSettingTab extends PluginSettingTab {
                 this.cancelPreCacheButton.textContent = 'Cancel pre-cache';
                 this.cancelPreCacheButton.className = 'mod-warning';
                 
-                this.cancelPreCacheButton.addEventListener('click', () => {
+                this.cancelPreCacheButton.addEventListener('click', async () => {
                     if (this.plugin.isPreCaching()) {
                         this.plugin.cancelPreCache();
                         new Notice('Pre-cache cancelled');
                         this.updateActionButtons();
-                        this.updateStatus();
+                        await this.updateStatus();
                     }
                 });
 
@@ -3603,15 +3640,14 @@ class EnhancedSettingTab extends PluginSettingTab {
 							 * Resets pre-cache state and updates UI to reflect cleared state.
 							 */
 							try {
-								const cacheDir = this.plugin.getCacheDir();
-								if (await this.plugin.app.vault.adapter.exists(cacheDir)) {
-									await this.plugin.app.vault.adapter.rmdir(cacheDir, true);
-									await this.plugin.ensureCacheInitialized();
-									this.plugin.resetPreCacheStatus();
-									await this.updateCacheStats();
-									new Notice('Cache cleared successfully');
-									this.plugin.logMessage('Cache cleared', 'verbose');
-									this.updateStatus();
+                                const cacheDir = this.plugin.getCacheDir();
+                                if (await this.plugin.app.vault.adapter.exists(cacheDir)) {
+                                    await this.plugin.app.vault.adapter.rmdir(cacheDir, true);
+                                    await this.plugin.ensureCacheInitialized();
+                                    this.plugin.resetPreCacheStatus();
+                                    await this.updateStatus();
+                                    this.plugin.logMessage('Cache cleared', 'verbose');
+                                    new Notice('Cache cleared successfully');
 								}
 							} catch (error) {
 								new Notice('Failed to clear cache');
@@ -3631,8 +3667,7 @@ class EnhancedSettingTab extends PluginSettingTab {
                 this.statusDiv.style.border = '1px solid var(--background-modifier-border)';
                 this.statusDiv.style.fontSize = '0.9em';
                 
-                await this.updateCacheStats();
-                this.updateStatus();
+                void this.updateStatus();
                 this.updateRadioButtons();
                 this.updateActionButtons();
 
@@ -3655,7 +3690,7 @@ class EnhancedSettingTab extends PluginSettingTab {
                             this.plugin.settings.logLevel = value;
                             await this.plugin.saveSettings();
                             this.plugin.logMessage(`Log level changed to: ${value}`, 'verbose');
-                            this.updateStatus();
+                            await this.updateStatus();
                         }));
                 
                 if (this.plugin.settings.logLevel === 'debug') {
@@ -3775,10 +3810,12 @@ class EnhancedSettingTab extends PluginSettingTab {
     /**
      * Updates status section with current plugin state.
      */
-    private updateStatus(): void {
-        if (!this.statusDiv) return;
+    private async updateStatus(): Promise<void> {
+        // Store a local reference since this.statusDiv might change
+        const statusDiv = this.statusDiv;
+        if (!statusDiv) return;
         
-        Promise.resolve().then(async () => {
+        try {
             const activeId = this.plugin.getActiveTwitchId();
             const activeStreamer = this.plugin.settings.selectedStreamerId;
             const streamerName = activeStreamer ? STREAMER_DISPLAY_MAP.get(activeStreamer) : null;
@@ -3788,49 +3825,55 @@ class EnhancedSettingTab extends PluginSettingTab {
             
             await this.updateCacheStats();
             
-            let statusHTML = `
-                <div style="margin-bottom: 8px;">
-                    <strong>Current source:</strong><br>
-                    ${streamerName || activeId || 'None selected'}
-                </div>
-                <div style="margin-bottom: 8px;">
-                    <strong>Emotes loaded:</strong><br>
-                    ${emoteCount > 0 ? `${emoteCount} emotes` : 'None'}
-                </div>
-                <div style="margin-bottom: 8px;">
-                    <strong>Cache strategy:</strong><br>
-                    ${this.plugin.settings.cacheStrategy === 'on-demand' ? 'On-Demand' : 'No Cache'}
-                </div>
-            `;
+            // Clear existing content
+            statusDiv.empty();
             
+            // Helper function to create a status row
+            const createStatusRow = (label: string, value: string) => {
+                const row = statusDiv.createDiv();
+                row.style.cssText = 'margin-bottom: 8px;';
+                
+                const strong = row.createEl('strong');
+                strong.textContent = `${label}:`;
+                row.createEl('br');
+                
+                const valueSpan = row.createSpan();
+                valueSpan.textContent = value;
+            };
+            
+            // Current source
+            createStatusRow('Current source', streamerName || activeId || 'None selected');
+            
+            // Emotes loaded
+            createStatusRow('Emotes loaded', emoteCount > 0 ? `${emoteCount} emotes` : 'None');
+            
+            // Cache strategy
+            const cacheStrategyDisplay = this.plugin.settings.cacheStrategy === 'on-demand' ? 'On-Demand' : 'No Cache';
+            createStatusRow('Cache strategy', cacheStrategyDisplay);
+            
+            // Cache status (only if not no-cache)
             if (this.plugin.settings.cacheStrategy !== 'no-cache') {
-                statusHTML += `
-                    <div style="margin-bottom: 8px;">
-                        <strong>Cache status:</strong><br>
-                        ${this.cacheStats.count} emotes cached (${this.formatBytes(this.cacheStats.size)})
-                    </div>
-                    <div style="margin-bottom: 8px;">
-                        <strong>Pre-cache:</strong><br>
-                        ${preCacheStatus}
-                    </div>
-                `;
+                createStatusRow('Cache status', `${this.cacheStats.count} emotes cached (${this.formatBytes(this.cacheStats.size)})`);
+                createStatusRow('Pre-cache', preCacheStatus);
             }
             
+            // Download in progress banner
             if (isPreCaching) {
-                statusHTML += `
-                    <div style="margin-top: 8px; padding: 8px; background: var(--background-modifier-success); border-radius: 4px; font-size: 0.85em;">
-                        <strong>⏳ Download in progress</strong><br>
-                        Check top-right corner for progress
-                    </div>
-                `;
-            }
-            
-            if (this.statusDiv) {
-                this.statusDiv.innerHTML = statusHTML;
+                const banner = statusDiv.createDiv();
+                banner.style.cssText = 'margin-top: 8px; padding: 8px; background: var(--background-modifier-success); border-radius: 4px; font-size: 0.85em;';
+                
+                const bannerTitle = banner.createEl('strong');
+                bannerTitle.textContent = '⏳ Download in progress';
+                banner.createEl('br');
+                
+                const bannerText = banner.createSpan();
+                bannerText.textContent = 'Check top-right corner for progress';
             }
             
             this.updateActionButtons();
-        });
+        } catch (error) {
+            this.plugin.logMessage(`Error updating status: ${error}`, 'verbose');
+        }
     }
 
     /**
@@ -3862,9 +3905,7 @@ class EnhancedSettingTab extends PluginSettingTab {
             
             try {
                 await this.plugin.refreshEmotesForUser(twitchId);
-                await this.updateCacheStats();
-                this.updateStatus();
-                this.updateActionButtons();
+                await this.updateStatus(); 
                 new Notice(`${displayName}'s emotes loaded`);
             } catch (error) {
                 this.plugin.logMessage(`Failed to load emotes: ${error}`, 'verbose');
@@ -3943,12 +3984,8 @@ onOpen(): void {
     // Create message container with Obsidian's standard text styling
     const messageContainer = contentEl.createDiv({ cls: 'modal-message-container' });
     
-    /**
-     * Parse multi-line message with bullet points and preserve formatting.
-     * Converts newlines to <br> tags and bullet points to styled list items.
-     */
-    const formattedMessage = this.formatMessageWithBulletPoints(this.message);
-    messageContainer.innerHTML = formattedMessage;
+    // Use the safe DOM method
+    messageContainer.appendChild(this.formatMessageWithBulletPoints(this.message));
     
     // Button container with flex layout matching Obsidian's design system
     const buttonContainer = contentEl.createDiv({ cls: 'modal-button-container' });
@@ -3973,56 +4010,66 @@ onOpen(): void {
         if (this.onCancel) this.onCancel();
     });
     
-    /**
-     * Safety-first focus strategy: Default to "No" to prevent accidental confirmations.
-     * This follows Obsidian's design patterns where destructive actions require explicit intent.
-     */
+    // Safety-first focus strategy: Default to "No" to prevent accidental confirmations
     noButton.focus();
 }
 
 /**
- * Formats plain text messages with bullet points and line breaks into HTML.
- * 
- * Preserves the formatting of warning messages with proper paragraph and list styling.
- * Converts bullet points (•) to styled list items and newlines to HTML breaks.
+ * Formats plain text messages with bullet points and line breaks into a DocumentFragment.
  * 
  * @param message - Plain text message with bullet points and newlines
- * @returns HTML-formatted string ready for innerHTML insertion
+ * @returns DocumentFragment containing formatted content
  */
-private formatMessageWithBulletPoints(message: string): string {
+private formatMessageWithBulletPoints(message: string): DocumentFragment {
+    const fragment = document.createDocumentFragment();
+    
     // Split by double newlines to handle paragraphs
     const paragraphs = message.split('\n\n');
-    let html = '';
     
     for (const paragraph of paragraphs) {
         if (paragraph.includes('•')) {
             // This paragraph contains bullet points - format as list
-            html += '<ul style="margin: 10px 0; padding-left: 20px;">';
+            const ul = document.createElement('ul');
+            ul.style.cssText = 'margin: 10px 0; padding-left: 20px;';
             
             // Split by newlines and filter out empty lines
             const lines = paragraph.split('\n').filter(line => line.trim());
             
             for (const line of lines) {
+                const li = document.createElement('li');
+                li.style.cssText = 'margin: 4px 0; color: var(--text-normal);';
+                
                 if (line.includes('•')) {
                     // Extract text after bullet
                     const text = line.substring(line.indexOf('•') + 1).trim();
-                    html += `<li style="margin: 4px 0; color: var(--text-normal);">${this.escapeHtml(text)}</li>`;
+                    li.textContent = text;
                 } else {
                     // Regular line without bullet
-                    html += `<li style="margin: 4px 0; color: var(--text-normal);">${this.escapeHtml(line)}</li>`;
+                    li.textContent = line;
                 }
+                ul.appendChild(li);
             }
             
-            html += '</ul>';
+            fragment.appendChild(ul);
         } else {
             // Regular paragraph without bullet points
-            // Replace single newlines with <br> tags
-            const formattedParagraph = paragraph.replace(/\n/g, '<br>');
-            html += `<p style="margin: 10px 0; color: var(--text-normal);">${this.escapeHtml(formattedParagraph)}</p>`;
+            const p = document.createElement('p');
+            p.style.cssText = 'margin: 10px 0; color: var(--text-normal);';
+            
+            // Replace single newlines with <br> elements
+            const lines = paragraph.split('\n');
+            lines.forEach((line, index) => {
+                p.appendChild(document.createTextNode(line));
+                if (index < lines.length - 1) {
+                    p.appendChild(document.createElement('br'));
+                }
+            });
+            
+            fragment.appendChild(p);
         }
     }
     
-    return html;
+    return fragment;
 }
 
 /**
