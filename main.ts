@@ -2850,24 +2850,28 @@ export default class SevenTVPlugin extends Plugin {
      * @param name - Display name of the emote for alt text and title attributes
      * @param id - 7TV emote identifier used for cache lookup and CDN URL construction
      */
-	private async insertWithOnDemandCache(editor: Editor, name: string, id: string): Promise<void> {
-		const cachePath = `${this.CACHE_DIR}/${id}.webp`;
-		const cdnUrl = `https://cdn.7tv.app/emote/${id}/1x.webp`;
-		
-		const isCached = await this.app.vault.adapter.exists(cachePath);
-		
-		// Use CDN URL with cache fallback in onerror
-		const html = `<img src="${cdnUrl}" alt="${name}" title=":${name}:" style="display: inline-block;height:1.5em;vertical-align:middle" onerror="this.src=this.src.replace('cdn.7tv.app/emote','_7tv-emotes-cache').replace('/1x.webp','.webp')">`;
-		
-		if (!isCached) {
-			// Cache in background for fallback availability
-			this.downloadToCache(id, cdnUrl, cachePath).catch(() => { });
-		}
-		
-		editor.replaceSelection(html);
+    private async insertWithOnDemandCache(editor: Editor, name: string, id: string): Promise<void> {
+        const cacheFileName = `${id}.webp`;
+        const cacheRelativePath = `${this.CACHE_DIR}/${cacheFileName}`;
+        const cdnUrl = `https://cdn.7tv.app/emote/${id}/1x.webp`;
+
+        // Use the <picture> element for CDN -> Cache fallback
+        const html = `<picture class="seven-tv-emote"><source srcset="${cdnUrl}" type="image/webp"><source srcset="${cacheRelativePath}" type="image/webp"><img src="${cacheRelativePath}" alt=":${name}:" title=":${name}:" style="height:1.5em;vertical-align:middle"></picture>`;
+
+        // Insert the emote into the editor
+        editor.replaceSelection(html);
+
+        // Check if we need to download the file to cache
+        if (!(await this.app.vault.adapter.exists(cacheRelativePath))) {
+            // Delay the cache download to let the CDN load first
+            setTimeout(() => {
+                this.downloadToCache(id, cdnUrl, cacheRelativePath).catch(() => {
+                });
+            }, 500);
+        }
     }
 
-    /**
+        /**
      * Creates cache directory in vault if it doesn't exist.
      */
     private async initializeCache(): Promise<void> {
