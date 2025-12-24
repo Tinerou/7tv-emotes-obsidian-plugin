@@ -2246,7 +2246,7 @@ class DownloadProgressTracker {
                 </div>
             `;
             
-            setTimeout(() => {
+            window.setTimeout(() => {
                 if (this.statusBarEl && this.statusBarEl.parentNode) {
                     this.statusBarEl.remove();
                     this.statusBarEl = null;
@@ -2326,7 +2326,7 @@ class DownloadProgressTracker {
                 </div>
             `;
             
-            setTimeout(() => {
+            window.setTimeout(() => {
                 if (this.statusBarEl && this.statusBarEl.parentNode) {
                     this.statusBarEl.remove();
                     this.statusBarEl = null;
@@ -2864,7 +2864,7 @@ export default class SevenTVPlugin extends Plugin {
         // Check if we need to download the file to cache
         if (!(await this.app.vault.adapter.exists(cacheRelativePath))) {
             // Delay the cache download to let the CDN load first
-            setTimeout(() => {
+            window.setTimeout(() => {
                 this.downloadToCache(id, cdnUrl, cacheRelativePath).catch(() => {
                 });
             }, 500);
@@ -2990,11 +2990,7 @@ export default class SevenTVPlugin extends Plugin {
                 await Promise.allSettled(promises);
                 
                 await new Promise(resolve => {
-                    if ('requestIdleCallback' in window) {
-                        (window as any).requestIdleCallback(() => resolve(null), { timeout: 100 });
-                    } else {
-                        setTimeout(resolve, 100);
-                    }
+                    window.setTimeout(resolve, 100);
                 });
                 
                 if (batchIndex % Math.max(1, Math.floor(totalBatches * 0.1)) === 0 || batchIndex % 5 === 0) {
@@ -3274,7 +3270,7 @@ class EnhancedSettingTab extends PluginSettingTab {
     plugin: SevenTVPlugin;
     
     /** Debounce timer for manual ID input */
-    private debounceTimer: NodeJS.Timeout | null = null;
+    private debounceTimer: number | null = null;
     
     /** Flag preventing concurrent display calls */
     private isDisplaying: boolean = false;
@@ -3335,20 +3331,19 @@ class EnhancedSettingTab extends PluginSettingTab {
         
         this.renderRequestId = requestAnimationFrame(async () => {
             try {
-                containerEl.createEl('h2', { text: '7TV Emotes' });
                 containerEl.createEl('p', { 
                     text: 'Integrate 7TV (Twitch) emotes into your notes with auto-complete suggestions.',
                     cls: 'setting-item-description'
                 });
 
-                containerEl.createEl('h3', { text: 'Streamer Selection' });
+                new Setting(containerEl).setName('Streamer selection').setHeading();
                 containerEl.createEl('p', { 
                     text: 'Choose from popular streamers or enter a Twitch ID directly.',
                     cls: 'setting-item-description'
                 });
                 
                 const streamerSetting = new Setting(containerEl)
-                    .setName('Select Streamer')
+                    .setName('Select streamer')
                     .setDesc('Streamer emotes will be available for auto-complete');
                 
                 const buttonContainer = streamerSetting.controlEl.createDiv();
@@ -3375,7 +3370,7 @@ class EnhancedSettingTab extends PluginSettingTab {
                 
                 button.addEventListener('click', () => {
                     if (this.isDisplaying) {
-                        setTimeout(() => {
+                        window.setTimeout(() => {
                             this.openStreamerModal(button, updateButtonText, manualInput);
                         }, 100);
                     } else {
@@ -3390,9 +3385,9 @@ class EnhancedSettingTab extends PluginSettingTab {
                 manualInput.style.flex = '1';
                 
                 manualInput.addEventListener('input', () => {
-                    if (this.debounceTimer) clearTimeout(this.debounceTimer);
+                    if (this.debounceTimer) window.clearTimeout(this.debounceTimer);
                     
-                    this.debounceTimer = setTimeout(async () => {
+                    this.debounceTimer = window.setTimeout(async () => {
                         const value = manualInput.value.trim();
                         this.plugin.settings.twitchUserId = value;
                         
@@ -3434,7 +3429,7 @@ class EnhancedSettingTab extends PluginSettingTab {
                     });
                 }
 
-                containerEl.createEl('h3', { text: 'Cache Settings' });
+                new Setting(containerEl).setName('Cache').setHeading();
                 containerEl.createEl('p', { 
                     text: 'Control how emote images are stored on your device.',
                     cls: 'setting-item-description'
@@ -3465,7 +3460,7 @@ class EnhancedSettingTab extends PluginSettingTab {
                 
                 const onDemandContent = onDemandOption.createDiv();
                 onDemandContent.createEl('div', { 
-                    text: 'On-Demand Cache (Recommended)',
+                    text: 'On-demand cache (recommended)',
                     attr: { style: 'font-weight: 600; margin-bottom: 2px;' }
                 });
                 onDemandContent.createEl('div', { 
@@ -3506,7 +3501,7 @@ class EnhancedSettingTab extends PluginSettingTab {
                 
                 const noCacheContent = noCacheOption.createDiv();
                 noCacheContent.createEl('div', { 
-                    text: 'No Cache',
+                    text: 'No cache',
                     attr: { style: 'font-weight: 600; margin-bottom: 2px;' }
                 });
                 noCacheContent.createEl('div', { 
@@ -3532,7 +3527,7 @@ class EnhancedSettingTab extends PluginSettingTab {
                 actionContainer.style.marginBottom = '24px';
 
                 this.preCacheButton = actionContainer.createEl('button');
-                this.preCacheButton.textContent = 'Pre-cache Now';
+                this.preCacheButton.textContent = 'Pre-cache now';
                 this.preCacheButton.style.flex = '1';
                 
                 this.preCacheButton.addEventListener('click', async () => {
@@ -3570,7 +3565,7 @@ class EnhancedSettingTab extends PluginSettingTab {
                 });
 
                 this.cancelPreCacheButton = actionContainer.createEl('button');
-                this.cancelPreCacheButton.textContent = 'Cancel Pre-cache';
+                this.cancelPreCacheButton.textContent = 'Cancel pre-cache';
                 this.cancelPreCacheButton.className = 'mod-warning';
                 
                 this.cancelPreCacheButton.addEventListener('click', () => {
@@ -3583,7 +3578,7 @@ class EnhancedSettingTab extends PluginSettingTab {
                 });
 
                 this.clearCacheButton = containerEl.createEl('button');
-                this.clearCacheButton.textContent = 'Clear Cache';
+                this.clearCacheButton.textContent = 'Clear cache';
                 this.clearCacheButton.style.width = '100%';
                 this.clearCacheButton.style.marginTop = '8px';
                 this.clearCacheButton.style.marginBottom = '24px';
@@ -3626,7 +3621,7 @@ class EnhancedSettingTab extends PluginSettingTab {
 					).open();
                 });
 
-                containerEl.createEl('h3', { text: 'Status' });
+                new Setting(containerEl).setName('Status').setHeading();
                 
                 this.statusDiv = containerEl.createDiv();
                 this.statusDiv.style.marginBottom = '24px';
@@ -3641,14 +3636,14 @@ class EnhancedSettingTab extends PluginSettingTab {
                 this.updateRadioButtons();
                 this.updateActionButtons();
 
-                containerEl.createEl('h3', { text: 'Advanced' });
+                new Setting(containerEl).setName('Advanced').setHeading();
                 containerEl.createEl('p', { 
-                    text: 'Settings for debugging and troubleshooting.',
+                    text: 'Debugging and troubleshooting.',
                     cls: 'setting-item-description'
                 });
 
                 new Setting(containerEl)
-                    .setName('Log Level')
+                    .setName('Log level')
                     .setDesc('Controls console output. Only change if debugging issues.')
                     .addDropdown(dropdown => dropdown
                         .addOption('none', 'None (Quiet)')
@@ -3789,21 +3784,21 @@ class EnhancedSettingTab extends PluginSettingTab {
             const streamerName = activeStreamer ? STREAMER_DISPLAY_MAP.get(activeStreamer) : null;
             const emoteCount = this.plugin.getEmoteCount();
             const isPreCaching = this.plugin.isPreCaching();
-            const preCacheStatus = this.plugin.isPreCacheComplete() ? 'Complete' : isPreCaching ? 'In Progress' : 'Not Started';
+            const preCacheStatus = this.plugin.isPreCacheComplete() ? 'Complete' : isPreCaching ? 'In progress' : 'Not started';
             
             await this.updateCacheStats();
             
             let statusHTML = `
                 <div style="margin-bottom: 8px;">
-                    <strong>Current Source:</strong><br>
+                    <strong>Current source:</strong><br>
                     ${streamerName || activeId || 'None selected'}
                 </div>
                 <div style="margin-bottom: 8px;">
-                    <strong>Emotes Loaded:</strong><br>
+                    <strong>Emotes loaded:</strong><br>
                     ${emoteCount > 0 ? `${emoteCount} emotes` : 'None'}
                 </div>
                 <div style="margin-bottom: 8px;">
-                    <strong>Cache Strategy:</strong><br>
+                    <strong>Cache strategy:</strong><br>
                     ${this.plugin.settings.cacheStrategy === 'on-demand' ? 'On-Demand' : 'No Cache'}
                 </div>
             `;
@@ -3811,7 +3806,7 @@ class EnhancedSettingTab extends PluginSettingTab {
             if (this.plugin.settings.cacheStrategy !== 'no-cache') {
                 statusHTML += `
                     <div style="margin-bottom: 8px;">
-                        <strong>Cache Status:</strong><br>
+                        <strong>Cache status:</strong><br>
                         ${this.cacheStats.count} emotes cached (${this.formatBytes(this.cacheStats.size)})
                     </div>
                     <div style="margin-bottom: 8px;">
@@ -3888,7 +3883,7 @@ class EnhancedSettingTab extends PluginSettingTab {
         }
         
         if (this.debounceTimer) {
-            clearTimeout(this.debounceTimer);
+            window.clearTimeout(this.debounceTimer);
             this.debounceTimer = null;
         }
         
@@ -4066,7 +4061,7 @@ private escapeHtml(text: string): string {
         const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
         if (activeView) {
             // Deferred focus restoration to ensure modal tear-down completes
-            setTimeout(() => {
+            window.setTimeout(() => {
                 /**
                  * Obsidian API-compatible focus restoration.
                  * The correct way to restore focus in Obsidian is to:
