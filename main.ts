@@ -2182,7 +2182,7 @@ class DownloadProgressTracker {
     private updateStatusBar(): void {
         if (!this.statusBarEl || !this.isActive) return;
         
-        // Clear existing content
+        // Clear existing content using safe method
         this.statusBarEl.empty();
         
         const elapsedSeconds = Math.floor((Date.now() - this.startTime) / 1000);
@@ -2190,7 +2190,7 @@ class DownloadProgressTracker {
         const speed = elapsedSeconds > 0 ? this.downloadedBytes / elapsedSeconds : 0;
         
         // Header section
-        const headerContainer = this.statusBarEl.createDiv();
+        const headerContainer = createDiv();
         headerContainer.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;';
         
         const title = headerContainer.createEl('strong');
@@ -2200,11 +2200,13 @@ class DownloadProgressTracker {
         batchInfo.textContent = `Batch ${this.currentBatch}/${this.totalBatches}`;
         batchInfo.style.cssText = 'font-size: 11px; color: var(--text-muted);';
         
+        this.statusBarEl.appendChild(headerContainer);
+        
         // Progress section
-        const progressContainer = this.statusBarEl.createDiv();
+        const progressContainer = createDiv();
         progressContainer.style.cssText = 'margin-bottom: 4px;';
         
-        const progressHeader = progressContainer.createDiv();
+        const progressHeader = createDiv();
         progressHeader.style.cssText = 'display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;';
         
         const progressText = progressHeader.createEl('span');
@@ -2213,15 +2215,20 @@ class DownloadProgressTracker {
         const progressPercent = progressHeader.createEl('span');
         progressPercent.textContent = `${progress.toFixed(1)}%`;
         
+        progressContainer.appendChild(progressHeader);
+        
         // Progress bar
-        const progressBarContainer = progressContainer.createDiv();
+        const progressBarContainer = createDiv();
         progressBarContainer.style.cssText = 'height: 4px; background: var(--background-modifier-border); border-radius: 2px; overflow: hidden; margin-bottom: 2px;';
         
-        const progressBar = progressBarContainer.createDiv();
+        const progressBar = createDiv();
         progressBar.style.cssText = `height: 100%; background: var(--interactive-accent); width: ${progress}%; transition: width 0.3s ease;`;
         
+        progressBarContainer.appendChild(progressBar);
+        progressContainer.appendChild(progressBarContainer);
+        
         // Size/speed info
-        const sizeInfo = progressContainer.createDiv();
+        const sizeInfo = createDiv();
         sizeInfo.style.cssText = 'display: flex; justify-content: space-between; font-size: 10px; color: var(--text-muted); margin-bottom: 4px;';
         
         const sizeText = sizeInfo.createEl('span');
@@ -2230,8 +2237,11 @@ class DownloadProgressTracker {
         const speedText = sizeInfo.createEl('span');
         speedText.textContent = `${this.formatBytes(speed)}/s`;
         
+        progressContainer.appendChild(sizeInfo);
+        this.statusBarEl.appendChild(progressContainer);
+        
         // Footer section
-        const footer = this.statusBarEl.createDiv();
+        const footer = createDiv();
         footer.style.cssText = 'display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); align-items: center;';
         
         const timer = footer.createEl('span');
@@ -2248,6 +2258,8 @@ class DownloadProgressTracker {
         cancelButton.addClass('mod-warning');
         cancelButton.style.cssText = 'padding: 2px 8px; font-size: 10px; height: auto; line-height: 1.2;';
         cancelButton.addEventListener('click', () => this.cancel());
+        
+        this.statusBarEl.appendChild(footer);
     }
 
     /**
@@ -2876,9 +2888,20 @@ export default class SevenTVPlugin extends Plugin {
      * @param id - 7TV emote identifier
      */
     private async insertWithoutCache(editor: Editor, name: string, id: string): Promise<void> {
-        const html = `<span class="seven-tv-emote" title=":${name}:"><img src="https://cdn.7tv.app/emote/${id}/1x.webp" alt="${name}" style="display:inline-block;height:1.5em;vertical-align:middle;"></span>`;
+        // Create the HTML structure using DOM API
+        const span = document.createElement('span');
+        span.className = 'seven-tv-emote';
+        span.setAttribute('title', `:${name}:`);
+        
+        const img = document.createElement('img');
+        img.setAttribute('src', `https://cdn.7tv.app/emote/${id}/1x.webp`);
+        img.setAttribute('alt', name);
+        img.setAttribute('style', 'display:inline-block;height:1.5em;vertical-align:middle;');
+        
+        span.appendChild(img);
+        
         this.logger.log(`Emote "${name}" (${id}) inserted via CDN (no-cache strategy)`, 'debug');
-        editor.replaceSelection(html);
+        editor.replaceSelection(span.outerHTML);
     }
 
     /**
@@ -2894,19 +2917,40 @@ export default class SevenTVPlugin extends Plugin {
         const cacheRelativePath = `${this.CACHE_DIR}/${cacheFileName}`;
         const cdnUrl = `https://cdn.7tv.app/emote/${id}/1x.webp`;
 
-        // Use the <picture> element for CDN -> Cache fallback
-        const html = `<picture class="seven-tv-emote"><source srcset="${cdnUrl}" type="image/webp"><source srcset="${cacheRelativePath}" type="image/webp"><img src="${cacheRelativePath}" alt=":${name}:" title=":${name}:" style="height:1.5em;vertical-align:middle"></picture>`;
-
+        // Create picture element using DOM API
+        const picture = document.createElement('picture');
+        picture.className = 'seven-tv-emote';
+        
+        const source1 = document.createElement('source');
+        source1.setAttribute('srcset', cdnUrl);
+        source1.setAttribute('type', 'image/webp');
+        
+        const source2 = document.createElement('source');
+        source2.setAttribute('srcset', cacheRelativePath);
+        source2.setAttribute('type', 'image/webp');
+        
+        const img = document.createElement('img');
+        img.setAttribute('src', cacheRelativePath);
+        img.setAttribute('alt', `:${name}:`);
+        img.setAttribute('title', `:${name}:`);
+        img.setAttribute('style', 'height:1.5em;vertical-align:middle');
+        
+        // Build the DOM tree
+        picture.appendChild(source1);
+        picture.appendChild(source2);
+        picture.appendChild(img);
+        
         // Insert the emote into the editor
-        editor.replaceSelection(html);
+        editor.replaceSelection(picture.outerHTML);
 
         // Check if we need to download the file to cache
         if (!(await this.app.vault.adapter.exists(cacheRelativePath))) {
             // Delay the cache download to let the CDN load first
             window.setTimeout(() => {
                 this.downloadToCache(id, cdnUrl, cacheRelativePath).catch(() => {
+                    // Ignore errors
                 });
-            }, 500);
+            }, 500); // <- Delay
         }
     }
 
@@ -4059,7 +4103,9 @@ private formatMessageWithBulletPoints(message: string): DocumentFragment {
             // Replace single newlines with <br> elements
             const lines = paragraph.split('\n');
             lines.forEach((line, index) => {
-                p.appendChild(document.createTextNode(line));
+                // Use textContent for safety instead of innerHTML
+                const textNode = document.createTextNode(line);
+                p.appendChild(textNode);
                 if (index < lines.length - 1) {
                     p.appendChild(document.createElement('br'));
                 }
