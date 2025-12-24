@@ -1,10 +1,10 @@
 {
 	"id": "7tv-emotes",
-	"name": "7tv Emotes",
-	"version": "1.0.2",
+	"name": "7TV Emotes",
+	"version": "1.0.3",
 	"minAppVersion": "0.15.0",
 	"description": "Insert 7TV emotes into Obsidian!",
 	"author": "Tinerou",
-	"authorUrl": "https://obsidian.md",
+	"authorUrl": "https://github.com/Tinerou",
 	"isDesktopOnly": false
 }

@@ -4,8 +4,7 @@
  * Integrates 7TV (Twitch) emotes into Obsidian markdown editor with auto-complete,
  * multiple caching strategies, and streamer-specific emote sets.
  * 
- * @version 1.0.2
- * @license MIT
+ * @version 1.0.3 * @license MIT
  * @author Tinerou
  */
 
@@ -3586,11 +3585,13 @@ class EnhancedSettingTab extends PluginSettingTab {
                 this.clearCacheButton.style.marginBottom = '24px';
                 
                 this.clearCacheButton.addEventListener('click', async () => {
-                    const warningMsg = `⚠️ Warning: Clearing the cache may cause emotes to not display correctly if:\n\n` +
-                                     `• The original CDN links change or break\n` +
-                                     `• You're offline and emotes aren't cached\n` +
-                                     `• You switch to "No Cache" mode later\n\n` +
-                                     `Are you sure you want to clear the cache?`;
+                    const warningMsg = `⚠️ Warning: Clearing the cache may cause emotes to not display correctly if:
+
+                    • The original CDN links change or break
+                    • You're offline and emotes aren't cached
+                    • You switch to "No Cache" mode later
+
+                    Are you sure you want to clear the cache?`;
                     
                     new SimpleConfirmationModal(
 						this.app, 
@@ -3930,51 +3931,118 @@ class SimpleConfirmationModal extends Modal {
         this.onCancel = onCancel;
     }
 
+/**
+ * Modal lifecycle method invoked when modal is presented.
+ * 
+ * Constructs DOM structure with warning message and action buttons.
+ * Handles multi-line text and bullet points with proper HTML formatting.
+ * Safety-focused with "No" as default selection to prevent accidental confirmations.
+ */
+onOpen(): void {
+    const { contentEl } = this;
+    
+    // Create message container with Obsidian's standard text styling
+    const messageContainer = contentEl.createDiv({ cls: 'modal-message-container' });
+    
     /**
-     * Modal lifecycle method invoked when modal is presented.
-     * 
-     * Constructs DOM structure with warning message and action buttons.
-     * Implements modal focus trap for keyboard navigation compliance.
-     * Safety-focused with "No" as default selection to prevent accidental confirmations.
+     * Parse multi-line message with bullet points and preserve formatting.
+     * Converts newlines to <br> tags and bullet points to styled list items.
      */
-    onOpen(): void {
-        const { contentEl } = this;
-        
-        // Create message container with Obsidian's standard text styling
-        contentEl.createEl('p', { 
-            text: this.message,
-            cls: 'modal-message'
-        });
-        
-        // Button container with flex layout matching Obsidian's design system
-        const buttonContainer = contentEl.createDiv({ cls: 'modal-button-container' });
-        
-        // Affirmative action button with primary styling
-        const yesButton = buttonContainer.createEl('button', { 
-            text: 'Yes',
-            cls: 'mod-cta'
-        });
-        yesButton.addEventListener('click', () => {
-            this.close();
-            this.onConfirm();
-        });
-        
-        // Negative action button with warning styling and default focus
-        const noButton = buttonContainer.createEl('button', { 
-            text: 'No',
-            cls: 'mod-warning'
-        });
-        noButton.addEventListener('click', () => {
-            this.close();
-            if (this.onCancel) this.onCancel();
-        });
-        
-        /**
-         * Safety-first focus strategy: Default to "No" to prevent accidental confirmations.
-         * This follows Obsidian's design patterns where destructive actions require explicit intent.
-         */
-        noButton.focus();
+    const formattedMessage = this.formatMessageWithBulletPoints(this.message);
+    messageContainer.innerHTML = formattedMessage;
+    
+    // Button container with flex layout matching Obsidian's design system
+    const buttonContainer = contentEl.createDiv({ cls: 'modal-button-container' });
+    
+    // Affirmative action button with primary styling
+    const yesButton = buttonContainer.createEl('button', { 
+        text: 'Yes',
+        cls: 'mod-cta'
+    });
+    yesButton.addEventListener('click', () => {
+        this.close();
+        this.onConfirm();
+    });
+    
+    // Negative action button with warning styling and default focus
+    const noButton = buttonContainer.createEl('button', { 
+        text: 'No',
+        cls: 'mod-warning'
+    });
+    noButton.addEventListener('click', () => {
+        this.close();
+        if (this.onCancel) this.onCancel();
+    });
+    
+    /**
+     * Safety-first focus strategy: Default to "No" to prevent accidental confirmations.
+     * This follows Obsidian's design patterns where destructive actions require explicit intent.
+     */
+    noButton.focus();
+}
+
+/**
+ * Formats plain text messages with bullet points and line breaks into HTML.
+ * 
+ * Preserves the formatting of warning messages with proper paragraph and list styling.
+ * Converts bullet points (•) to styled list items and newlines to HTML breaks.
+ * 
+ * @param message - Plain text message with bullet points and newlines
+ * @returns HTML-formatted string ready for innerHTML insertion
+ */
+private formatMessageWithBulletPoints(message: string): string {
+    // Split by double newlines to handle paragraphs
+    const paragraphs = message.split('\n\n');
+    let html = '';
+    
+    for (const paragraph of paragraphs) {
+        if (paragraph.includes('•')) {
+            // This paragraph contains bullet points - format as list
+            html += '<ul style="margin: 10px 0; padding-left: 20px;">';
+            
+            // Split by newlines and filter out empty lines
+            const lines = paragraph.split('\n').filter(line => line.trim());
+            
+            for (const line of lines) {
+                if (line.includes('•')) {
+                    // Extract text after bullet
+                    const text = line.substring(line.indexOf('•') + 1).trim();
+                    html += `<li style="margin: 4px 0; color: var(--text-normal);">${this.escapeHtml(text)}</li>`;
+                } else {
+                    // Regular line without bullet
+                    html += `<li style="margin: 4px 0; color: var(--text-normal);">${this.escapeHtml(line)}</li>`;
+                }
+            }
+            
+            html += '</ul>';
+        } else {
+            // Regular paragraph without bullet points
+            // Replace single newlines with <br> tags
+            const formattedParagraph = paragraph.replace(/\n/g, '<br>');
+            html += `<p style="margin: 10px 0; color: var(--text-normal);">${this.escapeHtml(formattedParagraph)}</p>`;
+        }
     }
+    
+    return html;
+}
+
+/**
+ * Basic HTML escaping to prevent XSS while allowing safe formatting.
+ * 
+ * Escapes special characters to ensure user safety while preserving
+ * intentional formatting from trusted plugin messages.
+ * 
+ * @param text - Text to escape
+ * @returns HTML-escaped text
+ */
+private escapeHtml(text: string): string {
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
 
     /**
      * Modal lifecycle method invoked when modal is dismissed.
