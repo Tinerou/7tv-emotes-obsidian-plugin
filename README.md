@@ -12,7 +12,7 @@ Integrate 7TV emotes directly into your Obsidian notes with auto-complete sugges
 ## 📦 Installation
 
 ### Manual Installation
-1. Download the latest release from https://github.com/Tinerou/7tv-emotes-obsidian-plugin
+1. Download the latest release from https://github.com/Tinerou/7tv-emotes-obsidian-plugin/releases
 2. Extract the files to your vault's `.obsidian/plugins/7tv-emotes/` folder
 3. Enable the plugin in Obsidian: Settings → Community plugins → 7TV Emotes
 
@@ -42,7 +42,7 @@ The plugin automatically creates a `_7tv-emotes-cache/` folder in your vault. Th
 1. In any note, type `:` followed by an emote name
    - Example: `:HU` (will suggest `:HUH:`)
 2. A suggestion popup will appear showing emote images and codes
-3. Press `Enter` or `Tab` to select an emote, or click with your mouse
+3. Press `Enter` to select an emote, or click with your mouse
 4. The typed text (`:HUH:`) will be replaced with the emote image
 
 ## 🎯 Examples
@@ -50,6 +50,19 @@ The plugin automatically creates a `_7tv-emotes-cache/` folder in your vault. Th
 ### Inline with Text
 ```markdown
 I can't wait to use emotes on Obsidian! :pog:
+Now you :pogU: yes you :pogU: can use emotes on Obsidian!
 ```
+<img width="358" height="51" alt="image" src="https://github.com/user-attachments/assets/9351e88b-95f0-4360-a217-f7ea3778a8e4" />
+
 Note: At this point in time you must have to click emote preview or press `ENTER` to insert emote.
+
+## 😢 Limitations
+- Long HTML when inputting emotes (you do not see this regularly but if you cursor is on it you will notice, also takes longer to `backspace` to remove emote.
+- Precaching emotes takes long due to 7TV limititions.
+- Must press `Enter` or click with mouse to insert emote.
+- Requires internet connection to insert emotes.
+- Emotes tend to take a decent amount of storage. Most are between 5KB-180KB.
+- Emotes lag while being downloaded from 7TV (Reason to use precaching).
+Note: Hopefully we can improve/change some of these in the future.
+
 
