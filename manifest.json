@@ -6,5 +6,6 @@
 	"description": "Insert 7TV emotes into Obsidian.",
 	"author": "Tinerou",
 	"authorUrl": "https://github.com/Tinerou",
-	"isDesktopOnly": false
+	"isDesktopOnly": false,
+	"css": "styles.css"
 }

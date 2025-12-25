@@ -123,21 +123,6 @@ class DownloadProgressTracker {
         if (!this.statusBarEl) {
             this.statusBarEl = document.createElement('div');
             this.statusBarEl.className = 'seven-tv-download-progress';
-            this.statusBarEl.style.cssText = `
-                position: fixed;
-                top: 10px;
-                right: 10px;
-                background: var(--background-primary);
-                border: 1px solid var(--background-modifier-border);
-                border-radius: 6px;
-                padding: 8px 12px;
-                font-size: 12px;
-                z-index: 9999;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                min-width: 240px;
-                max-width: 320px;
-                backdrop-filter: blur(10px);
-            `;
             document.body.appendChild(this.statusBarEl);
         }
     }
@@ -170,24 +155,21 @@ class DownloadProgressTracker {
         const speed = elapsedSeconds > 0 ? this.downloadedBytes / elapsedSeconds : 0;
         
         // Header section
-        const headerContainer = createDiv();
-        headerContainer.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;';
+        const headerContainer = createDiv({ cls: 'seven-tv-progress-header' });
         
         const title = headerContainer.createEl('strong');
         title.textContent = '📥 7TV Emote Cache';
         
         const batchInfo = headerContainer.createEl('span');
         batchInfo.textContent = `Batch ${this.currentBatch}/${this.totalBatches}`;
-        batchInfo.style.cssText = 'font-size: 11px; color: var(--text-muted);';
+        batchInfo.addClass('seven-tv-batch-info');
         
         this.statusBarEl.appendChild(headerContainer);
         
         // Progress section
-        const progressContainer = createDiv();
-        progressContainer.style.cssText = 'margin-bottom: 4px;';
+        const progressContainer = createDiv({ cls: 'seven-tv-progress-container' });
         
-        const progressHeader = createDiv();
-        progressHeader.style.cssText = 'display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;';
+        const progressHeader = createDiv({ cls: 'seven-tv-progress-header-row' });
         
         const progressText = progressHeader.createEl('span');
         progressText.textContent = `Progress: ${this.downloadedEmotes}/${this.totalEmotes}`;
@@ -198,18 +180,17 @@ class DownloadProgressTracker {
         progressContainer.appendChild(progressHeader);
         
         // Progress bar
-        const progressBarContainer = createDiv();
-        progressBarContainer.style.cssText = 'height: 4px; background: var(--background-modifier-border); border-radius: 2px; overflow: hidden; margin-bottom: 2px;';
+        const progressBarContainer = createDiv({ cls: 'seven-tv-progress-bar-container' });
         
-        const progressBar = createDiv();
-        progressBar.style.cssText = `height: 100%; background: var(--interactive-accent); width: ${progress}%; transition: width 0.3s ease;`;
+        const progressBar = createDiv({ cls: 'seven-tv-progress-bar' });
+        // Only keep width as inline style since it's dynamic
+        progressBar.style.width = `${progress}%`;
         
         progressBarContainer.appendChild(progressBar);
         progressContainer.appendChild(progressBarContainer);
         
         // Size/speed info
-        const sizeInfo = createDiv();
-        sizeInfo.style.cssText = 'display: flex; justify-content: space-between; font-size: 10px; color: var(--text-muted); margin-bottom: 4px;';
+        const sizeInfo = createDiv({ cls: 'seven-tv-size-info' });
         
         const sizeText = sizeInfo.createEl('span');
         sizeText.textContent = `${this.formatBytes(this.downloadedBytes)} / ${this.formatBytes(this.totalBytes)}`;
@@ -221,22 +202,19 @@ class DownloadProgressTracker {
         this.statusBarEl.appendChild(progressContainer);
         
         // Footer section
-        const footer = createDiv();
-        footer.style.cssText = 'display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); align-items: center;';
+        const footer = createDiv({ cls: 'seven-tv-progress-footer' });
         
-        const timer = footer.createEl('span');
+        const timer = footer.createEl('span', { cls: 'seven-tv-timer' });
         timer.textContent = `⏱️ ${elapsedSeconds}s`;
         
-        const failedInfo = footer.createEl('span');
+        const failedInfo = footer.createEl('span', { cls: 'seven-tv-failed-info' });
         if (this.failedEmotes > 0) {
             failedInfo.textContent = `❌ ${this.failedEmotes} failed`;
         }
         
         // Cancel button
-        const cancelButton = footer.createEl('button');
+        const cancelButton = footer.createEl('button', { cls: 'seven-tv-cancel-button mod-warning' });
         cancelButton.textContent = 'Cancel';
-        cancelButton.addClass('mod-warning');
-        cancelButton.style.cssText = 'padding: 2px 8px; font-size: 10px; height: auto; line-height: 1.2;';
         cancelButton.addEventListener('click', () => this.cancel());
         
         this.statusBarEl.appendChild(footer);
@@ -259,19 +237,15 @@ class DownloadProgressTracker {
         if (this.statusBarEl) {
             this.statusBarEl.empty();
             
-            const container = this.statusBarEl.createDiv();
-            container.style.cssText = 'text-align: center; padding: 8px;';
+            const container = this.statusBarEl.createDiv({ cls: 'seven-tv-cancelled-container' });
             
-            const title = container.createDiv();
-            title.style.cssText = 'font-weight: bold; color: var(--text-error); margin-bottom: 4px;';
+            const title = container.createDiv({ cls: 'seven-tv-cancelled-title' });
             title.textContent = '❌ Download Cancelled';
             
-            const stats = container.createDiv();
-            stats.style.cssText = 'font-size: 11px; color: var(--text-muted);';
+            const stats = container.createDiv({ cls: 'seven-tv-cancelled-stats' });
             stats.textContent = `${this.downloadedEmotes - this.failedEmotes}/${this.totalEmotes} emotes cached`;
             
-            const bytes = container.createDiv();
-            bytes.style.cssText = 'font-size: 10px; color: var(--text-faint); margin-top: 4px;';
+            const bytes = container.createDiv({ cls: 'seven-tv-cancelled-bytes' });
             bytes.textContent = `${this.formatBytes(this.downloadedBytes)} downloaded`;
         }
     }
@@ -334,27 +308,22 @@ class DownloadProgressTracker {
             this.statusBarEl.empty();
             
             // Create main container
-            const container = this.statusBarEl.createDiv();
-            container.style.cssText = 'text-align: center; padding: 8px;';
+            const container = this.statusBarEl.createDiv({ cls: 'seven-tv-complete-container' });
             
             // Create title
-            const title = container.createDiv();
-            title.style.cssText = 'font-weight: bold; color: var(--text-accent); margin-bottom: 4px;';
+            const title = container.createDiv({ cls: 'seven-tv-complete-title' });
             title.textContent = '✅ Download Complete';
             
             // Create stats line 1
-            const stats1 = container.createDiv();
-            stats1.style.cssText = 'font-size: 11px; color: var(--text-muted); margin-bottom: 2px;';
+            const stats1 = container.createDiv({ cls: 'seven-tv-complete-stats1' });
             stats1.textContent = `${this.downloadedEmotes - this.failedEmotes}/${this.totalEmotes} emotes cached`;
             
             // Create stats line 2
-            const stats2 = container.createDiv();
-            stats2.style.cssText = 'font-size: 10px; color: var(--text-muted); margin-bottom: 4px;';
+            const stats2 = container.createDiv({ cls: 'seven-tv-complete-stats2' });
             stats2.textContent = `${this.formatBytes(this.downloadedBytes)} total`;
             
             // Create success rate line
-            const successRateEl = container.createDiv();
-            successRateEl.style.cssText = 'font-size: 9px; color: var(--text-faint);';
+            const successRateEl = container.createDiv({ cls: 'seven-tv-success-rate' });
             successRateEl.textContent = `${successRate}% success in ${totalTime}s (${this.formatBytes(avgSpeed)}/s avg)`;
             
             window.setTimeout(() => {
@@ -535,9 +504,6 @@ export default class SevenTVPlugin extends Plugin {
     
     /** Active download operation promise for cancellation support */
     private activeDownloadPromise: Promise<void> | null = null;
-    
-    /** Flag tracking CSS injection state */
-    private stylesInjected: boolean = false;
     
     /** Logger instance for plugin operations */
     private logger: PluginLogger;
@@ -737,9 +703,6 @@ export default class SevenTVPlugin extends Plugin {
             this.logger.log(`Using ${this.settings.builtInStreamers.length} streamers from settings`, 'verbose');
         }
         
-        this.injectStyles();
-        this.logger.log('CSS injected', 'verbose');
-        
         if (this.settings.logLevel === 'debug') {
             console.timeLog('[7TV] Plugin initialization', 'CSS injected');
         }
@@ -794,92 +757,6 @@ export default class SevenTVPlugin extends Plugin {
         }
         
         this.logger.log('Plugin loaded successfully', 'basic');
-    }
-
-    /**
-     * Injects CSS styles for plugin UI components with safety checks.
-     * 
-     * Uses inline CSS to comply with Obsidian's Content Security Policy
-     * and implements duplicate injection prevention.
-     */
-    private injectStyles(): void {
-        const styleId = 'seven-tv-emotes-styles';
-        
-        if (this.stylesInjected) {
-            this.logger.log('Styles already injected (internal flag), skipping', 'debug');
-            return;
-        }
-        
-        if (document.getElementById(styleId)) {
-            this.logger.log('Style element already exists in DOM, reusing', 'debug');
-            this.stylesInjected = true;
-            return;
-        }
-        
-        const styleEl = document.createElement('style');
-        styleEl.id = styleId;
-        styleEl.textContent = `
-            .seven-tv-streamer-suggestion-container {
-                display: flex;
-                align-items: flex-start;
-                justify-content: space-between;
-                width: 100%;
-                padding: 10px 4px;
-                border-bottom: 1px solid var(--background-modifier-border);
-                min-height: 60px;
-            }
-            .seven-tv-streamer-suggestion-container:last-child {
-                border-bottom: none;
-            }
-            .seven-tv-streamer-info-section {
-                display: flex;
-                flex-direction: column;
-                flex: 1;
-            }
-            .seven-tv-streamer-suggestion-name {
-                font-weight: 600;
-                font-size: 14px;
-                color: var(--text-normal);
-                line-height: 1.4;
-                margin-bottom: 4px;
-            }
-            .seven-tv-streamer-suggestion-id {
-                font-size: 12px;
-                color: var(--text-muted);
-                opacity: 0.8;
-                line-height: 1.3;
-            }
-            .seven-tv-streamer-selected-indicator {
-                font-size: 0.8em;
-                color: var(--text-accent);
-                margin-left: auto;
-                padding-left: 10px;
-                white-space: nowrap;
-                align-self: center;
-            }
-            
-            .seven-tv-suggestion-item {
-                display: flex;
-                align-items: center;
-                padding: 4px 8px;
-            }
-            .seven-tv-suggestion-img {
-                height: 1.5em !important;
-                vertical-align: middle !important;
-                margin-right: 0.5em !important;
-                border-radius: 3px !important;
-            }
-            .seven-tv-suggestion-text {
-                vertical-align: middle;
-                color: var(--text-muted);
-                font-family: var(--font-monospace);
-                font-size: 0.9em;
-            }
-        `;
-        
-        document.head.appendChild(styleEl);
-        this.stylesInjected = true;
-        this.logger.log('CSS styles injected successfully', 'verbose');
     }
 
     /**
