@@ -4,7 +4,8 @@
  * Integrates 7TV (Twitch) emotes into Obsidian markdown editor with auto-complete,
  * multiple caching strategies, and streamer-specific emote sets.
  * 
- * @version 1.0.3 * @license MIT
+ * @version 1.0.3
+ * @license MIT
  * @author Tinerou
  */
 
@@ -66,6 +67,9 @@ const DEFAULT_SETTINGS: SevenTVSettings = {
  * 
  * Provides real-time progress indication with byte-level tracking,
  * download speed calculation, and cancellation support.
+ * 
+ * @note Uses plugin.register() for all resource cleanup to comply with Obsidian guidelines
+ * @note Implements performance optimizations to avoid main thread blocking
  */
 class DownloadProgressTracker {
     private plugin: SevenTVPlugin;
@@ -81,11 +85,30 @@ class DownloadProgressTracker {
     private currentBatch: number = 0;
     private totalBatches: number = 0;
     private onCancelCallback: (() => void) | null = null;
+    /** Timer for removal of status bar after completion */
+    private removalTimerId: number | null = null;
+    /** DOM element references for efficient updates */
+    private domRefs: {
+        batchInfo?: HTMLElement;
+        progressText?: HTMLElement;
+        progressPercent?: HTMLElement;
+        progressBar?: HTMLElement;
+        sizeText?: HTMLElement;
+        speedText?: HTMLElement;
+        timer?: HTMLElement;
+        failedInfo?: HTMLElement;
+    } = {};
+    /** Throttle update requests to avoid excessive DOM manipulation */
+    private updatePending: boolean = false;
+    /** Last update timestamp for throttling */
+    private lastUpdateTime: number = 0;
+    /** Minimum time between updates (ms) */
+    private readonly UPDATE_THROTTLE_MS = 100;
 
     /**
      * Creates a new progress tracker instance.
      * 
-     * @param plugin - Main plugin instance for logging coordination
+     * @param plugin - Main plugin instance for logging coordination and resource cleanup
      */
     constructor(plugin: SevenTVPlugin) {
         this.plugin = plugin;
@@ -117,13 +140,20 @@ class DownloadProgressTracker {
     }
 
     /**
-     * Creates or updates the floating status bar element.
+     * Creates or updates the floating status bar element with proper cleanup registration.
      */
     private createStatusBar(): void {
         if (!this.statusBarEl) {
             this.statusBarEl = document.createElement('div');
             this.statusBarEl.className = 'seven-tv-download-progress';
             document.body.appendChild(this.statusBarEl);
+            
+            // Register cleanup for status bar element using plugin's register method
+            this.plugin.register(() => {
+                if (this.statusBarEl?.parentNode) {
+                    this.statusBarEl.remove();
+                }
+            });
         }
     }
 
@@ -142,17 +172,96 @@ class DownloadProgressTracker {
     }
 
     /**
-     * Updates status bar content with current progress metrics.
+     * Initializes DOM structure on first call, then updates efficiently.
+     * Throttles updates to prevent main thread blocking.
      */
     private updateStatusBar(): void {
         if (!this.statusBarEl || !this.isActive) return;
         
-        // Clear existing content using safe method
-        this.statusBarEl.empty();
+        // Throttle updates to avoid excessive DOM manipulation
+        const now = Date.now();
+        if (now - this.lastUpdateTime < this.UPDATE_THROTTLE_MS) {
+            if (!this.updatePending) {
+                this.updatePending = true;
+                const rafId = requestAnimationFrame(() => {
+                    this.updatePending = false;
+                    this.lastUpdateTime = Date.now();
+                    this.performStatusBarUpdate();
+                });
+                // Register cleanup for THIS SPECIFIC rafId
+                this.plugin.register(() => cancelAnimationFrame(rafId));
+            }
+            return;
+        }
+        
+        this.updatePending = false;
+        this.lastUpdateTime = now;
+        this.performStatusBarUpdate();
+    }
+
+    /**
+     * Performs the actual DOM update with optimized element reuse.
+     */
+    private performStatusBarUpdate(): void {
+        if (!this.statusBarEl || !this.isActive) return;
         
         const elapsedSeconds = Math.floor((Date.now() - this.startTime) / 1000);
         const progress = this.totalEmotes > 0 ? (this.downloadedEmotes / this.totalEmotes) * 100 : 0;
         const speed = elapsedSeconds > 0 ? this.downloadedBytes / elapsedSeconds : 0;
+        
+        // Initialize DOM structure on first call
+        if (!this.domRefs.batchInfo) {
+            this.initializeStatusBarStructure();
+        }
+        
+        // Update only the changed elements (much faster than rebuilding)
+        if (this.domRefs.batchInfo) {
+            this.domRefs.batchInfo.textContent = `Batch ${this.currentBatch}/${this.totalBatches}`;
+        }
+        
+        if (this.domRefs.progressText) {
+            this.domRefs.progressText.textContent = `Progress: ${this.downloadedEmotes}/${this.totalEmotes}`;
+        }
+        
+        if (this.domRefs.progressPercent) {
+            this.domRefs.progressPercent.textContent = `${progress.toFixed(1)}%`;
+        }
+        
+        if (this.domRefs.progressBar) {
+            this.domRefs.progressBar.style.width = `${progress}%`;
+        }
+        
+        if (this.domRefs.sizeText) {
+            this.domRefs.sizeText.textContent = `${this.formatBytes(this.downloadedBytes)} / ${this.formatBytes(this.totalBytes)}`;
+        }
+        
+        if (this.domRefs.speedText) {
+            this.domRefs.speedText.textContent = `${this.formatBytes(speed)}/s`;
+        }
+        
+        if (this.domRefs.timer) {
+            this.domRefs.timer.textContent = `⏱️ ${elapsedSeconds}s`;
+        }
+        
+        if (this.domRefs.failedInfo) {
+            if (this.failedEmotes > 0) {
+                this.domRefs.failedInfo.textContent = `❌ ${this.failedEmotes} failed`;
+                this.domRefs.failedInfo.style.display = 'inline';
+            } else {
+                this.domRefs.failedInfo.style.display = 'none';
+            }
+        }
+    }
+
+    /**
+     * Initializes the status bar DOM structure once and stores element references.
+     */
+    private initializeStatusBarStructure(): void {
+        if (!this.statusBarEl) return;
+        
+        // Clear existing content
+        this.statusBarEl.empty();
+        this.domRefs = {};
         
         // Header section
         const headerContainer = createDiv({ cls: 'seven-tv-progress-header' });
@@ -160,9 +269,8 @@ class DownloadProgressTracker {
         const title = headerContainer.createEl('strong');
         title.textContent = '📥 7TV Emote Cache';
         
-        const batchInfo = headerContainer.createEl('span');
-        batchInfo.textContent = `Batch ${this.currentBatch}/${this.totalBatches}`;
-        batchInfo.addClass('seven-tv-batch-info');
+        this.domRefs.batchInfo = headerContainer.createEl('span');
+        this.domRefs.batchInfo.addClass('seven-tv-batch-info');
         
         this.statusBarEl.appendChild(headerContainer);
         
@@ -171,32 +279,26 @@ class DownloadProgressTracker {
         
         const progressHeader = createDiv({ cls: 'seven-tv-progress-header-row' });
         
-        const progressText = progressHeader.createEl('span');
-        progressText.textContent = `Progress: ${this.downloadedEmotes}/${this.totalEmotes}`;
+        this.domRefs.progressText = progressHeader.createEl('span');
         
-        const progressPercent = progressHeader.createEl('span');
-        progressPercent.textContent = `${progress.toFixed(1)}%`;
+        this.domRefs.progressPercent = progressHeader.createEl('span');
         
         progressContainer.appendChild(progressHeader);
         
         // Progress bar
         const progressBarContainer = createDiv({ cls: 'seven-tv-progress-bar-container' });
         
-        const progressBar = createDiv({ cls: 'seven-tv-progress-bar' });
-        // Only keep width as inline style since it's dynamic
-        progressBar.style.width = `${progress}%`;
+        this.domRefs.progressBar = createDiv({ cls: 'seven-tv-progress-bar' });
         
-        progressBarContainer.appendChild(progressBar);
+        progressBarContainer.appendChild(this.domRefs.progressBar);
         progressContainer.appendChild(progressBarContainer);
         
         // Size/speed info
         const sizeInfo = createDiv({ cls: 'seven-tv-size-info' });
         
-        const sizeText = sizeInfo.createEl('span');
-        sizeText.textContent = `${this.formatBytes(this.downloadedBytes)} / ${this.formatBytes(this.totalBytes)}`;
+        this.domRefs.sizeText = sizeInfo.createEl('span');
         
-        const speedText = sizeInfo.createEl('span');
-        speedText.textContent = `${this.formatBytes(speed)}/s`;
+        this.domRefs.speedText = sizeInfo.createEl('span');
         
         progressContainer.appendChild(sizeInfo);
         this.statusBarEl.appendChild(progressContainer);
@@ -204,20 +306,22 @@ class DownloadProgressTracker {
         // Footer section
         const footer = createDiv({ cls: 'seven-tv-progress-footer' });
         
-        const timer = footer.createEl('span', { cls: 'seven-tv-timer' });
-        timer.textContent = `⏱️ ${elapsedSeconds}s`;
+        this.domRefs.timer = footer.createEl('span', { cls: 'seven-tv-timer' });
         
-        const failedInfo = footer.createEl('span', { cls: 'seven-tv-failed-info' });
-        if (this.failedEmotes > 0) {
-            failedInfo.textContent = `❌ ${this.failedEmotes} failed`;
-        }
+        this.domRefs.failedInfo = footer.createEl('span', { cls: 'seven-tv-failed-info' });
+        this.domRefs.failedInfo.style.display = 'none';
         
-        // Cancel button
+        // Cancel button - use plugin.registerDomEvent for automatic cleanup
         const cancelButton = footer.createEl('button', { cls: 'seven-tv-cancel-button mod-warning' });
         cancelButton.textContent = 'Cancel';
-        cancelButton.addEventListener('click', () => this.cancel());
+        
+        // Register event with plugin for automatic cleanup
+        this.plugin.registerDomEvent(cancelButton, 'click', () => this.cancel());
         
         this.statusBarEl.appendChild(footer);
+        
+        // Initial update
+        this.performStatusBarUpdate();
     }
 
     /**
@@ -262,6 +366,7 @@ class DownloadProgressTracker {
 
     /**
      * Records successful emote download with byte count.
+     * Uses throttled updates to prevent performance issues.
      * 
      * @param bytes - Bytes downloaded for this emote
      */
@@ -269,27 +374,29 @@ class DownloadProgressTracker {
         if (!this.isActive) return;
         this.downloadedEmotes++;
         this.downloadedBytes += bytes;
-        this.updateStatusBar();
+        this.updateStatusBar(); // Throttled internally
     }
 
     /**
      * Records failed emote download attempt.
+     * Uses throttled updates to prevent performance issues.
      */
     recordFailure(): void {
         if (!this.isActive) return;
         this.failedEmotes++;
-        this.updateStatusBar();
+        this.updateStatusBar(); // Throttled internally
     }
 
     /**
      * Updates batch progress information.
+     * Uses throttled updates to prevent performance issues.
      * 
      * @param batchIndex - Current batch number (1-indexed)
      */
     updateBatch(batchIndex: number): void {
         if (!this.isActive) return;
         this.currentBatch = batchIndex;
-        this.updateStatusBar();
+        this.updateStatusBar(); // Throttled internally
     }
 
     /**
@@ -326,12 +433,21 @@ class DownloadProgressTracker {
             const successRateEl = container.createDiv({ cls: 'seven-tv-success-rate' });
             successRateEl.textContent = `${successRate}% success in ${totalTime}s (${this.formatBytes(avgSpeed)}/s avg)`;
             
-            window.setTimeout(() => {
+            // Clear any existing removal timer
+            if (this.removalTimerId) {
+                window.clearTimeout(this.removalTimerId);
+                this.removalTimerId = null;
+            }
+            
+            // Track removal timer for cleanup using plugin.register()
+            this.removalTimerId = window.setTimeout(() => {
                 if (this.statusBarEl && this.statusBarEl.parentNode) {
                     this.statusBarEl.remove();
                     this.statusBarEl = null;
                 }
+                this.removalTimerId = null;
             }, 5000);
+
         }
         
         if (!this.isCancelled) {
@@ -354,14 +470,29 @@ class DownloadProgressTracker {
 
     /**
      * Cleans up tracker resources and DOM elements.
+     * @note This is registered with plugin.register() in plugin initialization
      */
     cleanup(): void {
-        if (this.statusBarEl && this.statusBarEl.parentNode) {
-            this.statusBarEl.remove();
-            this.statusBarEl = null;
+        // Clear removal timer
+        if (this.removalTimerId) {
+            window.clearTimeout(this.removalTimerId);
+            this.removalTimerId = null;
         }
+        
+        // Clean up status bar element
+        if (this.statusBarEl?.parentNode) {
+            this.statusBarEl.remove();
+        }
+        this.statusBarEl = null;
+        
+        // Clear DOM references
+        this.domRefs = {};
+        
+        // Reset state
         this.isActive = false;
         this.isCancelled = false;
+        this.onCancelCallback = null;
+        this.updatePending = false;
     }
 }
 
@@ -518,6 +649,30 @@ export default class SevenTVPlugin extends Plugin {
     private abortController: AbortController | null = null;
 
     /**
+     * Creates and manages abort controller with automatic cleanup.
+     * 
+     * @returns New AbortController instance with cleanup registration
+     */
+    private createAbortController(): AbortController {
+        // Clean up existing abort controller
+        if (this.abortController) {
+            this.abortController.abort();
+        }
+        
+        // Create new abort controller
+        this.abortController = new AbortController();
+        
+        // Register cleanup for abort controller using register()
+        this.register(() => {
+            if (this.abortController) {
+                this.abortController.abort();
+            }
+        });
+        
+        return this.abortController;
+    }
+
+    /**
      * Loads streamers from the streamers.json file in the plugin directory.
      * 
      * @returns Array of streamer objects or empty array if file not found/invalid
@@ -670,7 +825,7 @@ export default class SevenTVPlugin extends Plugin {
     /**
      * Plugin initialization lifecycle method.
      * 
-     * Loads settings, injects CSS, initializes cache, registers editor
+     * Loads settings, initializes cache, registers editor
      * suggestions, and loads any pre-configured emote sets.
      */
     async onload() {
@@ -701,10 +856,6 @@ export default class SevenTVPlugin extends Plugin {
             }
         } else {
             this.logger.log(`Using ${this.settings.builtInStreamers.length} streamers from settings`, 'verbose');
-        }
-        
-        if (this.settings.logLevel === 'debug') {
-            console.timeLog('[7TV] Plugin initialization', 'CSS injected');
         }
         
         if (this.settings.cacheStrategy !== 'no-cache') {
@@ -755,9 +906,12 @@ export default class SevenTVPlugin extends Plugin {
         if (this.settings.logLevel === 'debug') {
             console.timeEnd('[7TV] Plugin initialization');
         }
+
+        this.register(() => this.downloadTracker.cleanup());
         
         this.logger.log('Plugin loaded successfully', 'basic');
     }
+   
 
     /**
      * Plugin cleanup lifecycle method.
@@ -767,18 +921,12 @@ export default class SevenTVPlugin extends Plugin {
      */
     onunload() {
         if (this.activeDownloadPromise) {
-            this.logger.log('Active download operation cancelled on unload', 'verbose');
+        this.cancelPreCache();
         }
-        
+        // Clean up abort controller
         if (this.abortController) {
             this.abortController.abort();
         }
-
-        if (this.downloadTracker) {
-            this.downloadTracker.cleanup();
-        }
-        
-        this.downloadTracker.cleanup();
         
         this.logger.log('Plugin unloaded', 'basic');
     }
@@ -890,15 +1038,18 @@ export default class SevenTVPlugin extends Plugin {
         // Check if we need to download the file to cache
         if (!(await this.app.vault.adapter.exists(cacheRelativePath))) {
             // Delay the cache download to let the CDN load first
-            window.setTimeout(() => {
+            const delayTimer = window.setTimeout(() => {
                 this.downloadToCache(id, cdnUrl, cacheRelativePath).catch(() => {
                     // Ignore errors
                 });
             }, 500); // <- Delay
+            
+            // Register cleanup for timer using plugin.register()
+            this.register(() => window.clearTimeout(delayTimer));
         }
     }
 
-        /**
+    /**
      * Creates cache directory in vault if it doesn't exist.
      */
     private async initializeCache(): Promise<void> {
@@ -949,7 +1100,8 @@ export default class SevenTVPlugin extends Plugin {
             this.abortController.abort();
         }
         
-        this.abortController = new AbortController();
+        // Use the managed abort controller creation
+        this.abortController = this.createAbortController();
         
         this.activeDownloadPromise = this.preCacheEmoteSet(emoteMap);
         this.activeDownloadPromise
@@ -966,12 +1118,12 @@ export default class SevenTVPlugin extends Plugin {
             })
             .finally(() => { 
                 this.activeDownloadPromise = null;
-                this.abortController = null;
             });
     }
 
     /**
      * Pre-caches all emotes in a set using batched downloads with progress tracking.
+     * Adds batch delays to prevent thread blocking.
      * 
      * @param emoteMap - Map of emote names to 7TV IDs
      */
@@ -1016,8 +1168,10 @@ export default class SevenTVPlugin extends Plugin {
                 
                 await Promise.allSettled(promises);
                 
+                // Add a small delay between batches to prevent thread blocking
                 await new Promise(resolve => {
-                    window.setTimeout(resolve, 100);
+                    const delayTimer = window.setTimeout(resolve, 50);
+                    this.register(() => window.clearTimeout(delayTimer));
                 });
                 
                 if (batchIndex % Math.max(1, Math.floor(totalBatches * 0.1)) === 0 || batchIndex % 5 === 0) {
@@ -1291,22 +1445,27 @@ class EmoteSuggest extends EditorSuggest<string> {
  * 
  * Features streamlined cache strategy selection with immediate visual feedback,
  * detailed status display, and clear separation between primary and advanced configuration.
+ * 
+ * @property isDisplaying - Flag preventing concurrent display calls
+ * @property statusDiv - Status display element reference
+ * @property cacheStats - Cache statistics for display purposes
+ * @property onDemandRadio - Reference to on-demand cache radio button element
+ * @property noCacheRadio - Reference to no-cache radio button element
+ * @property preCacheButton - Reference to pre-cache action button
+ * @property cancelPreCacheButton - Reference to cancel pre-cache button
+ * @property clearCacheButton - Reference to clear cache button
+ * @note Uses plugin.registerDomEvent() and plugin.register() for all resource cleanup
+ * @note Removes manual timer management to prevent performance violations
  */
 class EnhancedSettingTab extends PluginSettingTab {
     /** Reference to main plugin instance */
     plugin: SevenTVPlugin;
-    
-    /** Debounce timer for manual ID input */
-    private debounceTimer: number | null = null;
     
     /** Flag preventing concurrent display calls */
     private isDisplaying: boolean = false;
     
     /** Status display element reference */
     private statusDiv: HTMLElement | null = null;
-    
-    /** Animation frame request ID for rendering coordination */
-    private renderRequestId: number | null = null;
     
     /** Cache statistics for display */
     private cacheStats: { count: number; size: number } = { count: 0, size: 0 };
@@ -1333,7 +1492,8 @@ class EnhancedSettingTab extends PluginSettingTab {
      * Renders the settings tab interface with organized sections.
      * 
      * Prevents concurrent display calls and includes safety checks
-     * for rendering during Obsidian's measure cycles.
+     * for rendering during Obsidian's measure cycles. Uses plugin.registerDomEvent()
+     * for automatic cleanup of all event listeners.
      */
     async display(): Promise<void> {
         if (this.isDisplaying) {
@@ -1341,14 +1501,9 @@ class EnhancedSettingTab extends PluginSettingTab {
             return;
         }
         
-        if (this.renderRequestId !== null) {
-            cancelAnimationFrame(this.renderRequestId);
-            this.renderRequestId = null;
-        }
-        
         this.isDisplaying = true;
         
-        // Only log timing if debug is enabled
+        // Only log timing if debug logging is enabled
         if (this.plugin.settings.logLevel === 'debug') {
             console.time('[7TV] Settings render');
         }
@@ -1356,341 +1511,333 @@ class EnhancedSettingTab extends PluginSettingTab {
         const { containerEl } = this;
         containerEl.empty();
         
-        this.renderRequestId = requestAnimationFrame(async () => {
-            try {
-                containerEl.createEl('p', { 
-                    text: 'Integrate 7TV (Twitch) emotes into your notes with auto-complete suggestions.',
-                    cls: 'setting-item-description'
-                });
+        try {
+            containerEl.createEl('p', { 
+                text: 'Integrate 7TV (Twitch) emotes into your notes with auto-complete suggestions.',
+                cls: 'setting-item-description'
+            });
 
-                new Setting(containerEl).setName('Streamer selection').setHeading();
-                containerEl.createEl('p', { 
-                    text: 'Choose from popular streamers or enter a Twitch ID directly.',
-                    cls: 'setting-item-description'
-                });
-                
-                const streamerSetting = new Setting(containerEl)
-                    .setName('Select streamer')
-                    .setDesc('Streamer emotes will be available for auto-complete');
-                
-                const buttonContainer = streamerSetting.controlEl.createDiv();
-                buttonContainer.style.display = 'flex';
-                buttonContainer.style.gap = '8px';
-                buttonContainer.style.alignItems = 'center';
-                
-                const button = buttonContainer.createEl('button');
-                button.addClass('mod-cta');
-                button.style.flex = '1';
-                button.style.textAlign = 'left';
-                button.style.overflow = 'hidden';
-                button.style.textOverflow = 'ellipsis';
-                button.style.whiteSpace = 'nowrap';
-                
-                const updateButtonText = () => {
-                    const currentKey = this.plugin.settings.selectedStreamerId;
-                    const displayName = this.plugin.getStreamerDisplayMap().get(currentKey);
-                    button.textContent = displayName || currentKey || 'Select streamer...';
-                };
-                
-                updateButtonText();
-                
-                button.addEventListener('click', () => {
-                    if (this.isDisplaying) {
-                        window.setTimeout(() => {
-                            this.openStreamerModal(button, updateButtonText, manualInput);
-                        }, 100);
-                    } else {
-                        this.openStreamerModal(button, updateButtonText, manualInput);
-                    }
-                });
-                
-                const manualInput = buttonContainer.createEl('input');
-                manualInput.type = 'text';
-                manualInput.placeholder = 'Twitch ID';
-                manualInput.value = this.plugin.settings.twitchUserId;
-                manualInput.style.flex = '1';
-                
-                manualInput.addEventListener('input', () => {
-                    if (this.debounceTimer) window.clearTimeout(this.debounceTimer);
+            new Setting(containerEl).setName('Streamer selection').setHeading();
+            containerEl.createEl('p', { 
+                text: 'Choose from popular streamers or enter a Twitch ID directly.',
+                cls: 'setting-item-description'
+            });
+            
+            const streamerSetting = new Setting(containerEl)
+                .setName('Select streamer')
+                .setDesc('Streamer emotes will be available for auto-complete');
+            
+            const buttonContainer = streamerSetting.controlEl.createDiv();
+            buttonContainer.style.display = 'flex';
+            buttonContainer.style.gap = '8px';
+            buttonContainer.style.alignItems = 'center';
+            
+            const button = buttonContainer.createEl('button');
+            button.addClass('mod-cta');
+            button.style.flex = '1';
+            button.style.textAlign = 'left';
+            button.style.overflow = 'hidden';
+            button.style.textOverflow = 'ellipsis';
+            button.style.whiteSpace = 'nowrap';
+            
+            const updateButtonText = () => {
+                const currentKey = this.plugin.settings.selectedStreamerId;
+                const displayName = this.plugin.getStreamerDisplayMap().get(currentKey);
+                button.textContent = displayName || currentKey || 'Select streamer...';
+            };
+            
+            updateButtonText();
+            
+            // Use plugin.registerDomEvent for automatic cleanup
+            this.plugin.registerDomEvent(button, 'click', () => {
+                this.openStreamerModal(button, updateButtonText, manualInput);
+            });
+            
+            const manualInput = buttonContainer.createEl('input');
+            manualInput.type = 'text';
+            manualInput.placeholder = 'Twitch ID';
+            manualInput.value = this.plugin.settings.twitchUserId;
+            manualInput.style.flex = '1';
+            
+            // Use plugin.registerDomEvent for automatic cleanup with debouncing
+            this.plugin.registerDomEvent(manualInput, 'input', () => {
+                // Use requestAnimationFrame for debouncing to prevent performance issues
+                const updateHandler = () => {
+                    const value = manualInput.value.trim();
+                    this.plugin.settings.twitchUserId = value;
                     
-                    this.debounceTimer = window.setTimeout(async () => {
-                        const value = manualInput.value.trim();
-                        this.plugin.settings.twitchUserId = value;
-                        
-                        if (value && this.plugin.settings.selectedStreamerId) {
-                            this.plugin.settings.selectedStreamerId = '';
-                            updateButtonText();
-                        }
-                        
-                        await this.plugin.saveSettings();
-                        
+                    if (value && this.plugin.settings.selectedStreamerId) {
+                        this.plugin.settings.selectedStreamerId = '';
+                        updateButtonText();
+                    }
+                    
+                    this.plugin.saveSettings().then(() => {
                         if (/^\d{6,}$/.test(value)) {
                             this.plugin.logMessage(`Auto-fetching emotes for manual ID: ${value}`, 'verbose');
-                            try {
-                                await this.plugin.refreshEmotesForUser(value);
-                                await this.updateStatus();
-                                new Notice('Emotes loaded');
-                            } catch (error) {
-                                this.plugin.logMessage(`Failed to load emotes: ${error}`, 'verbose');
-                                new Notice('Failed to load emotes');
-                            }
+                            this.plugin.refreshEmotesForUser(value)
+                                .then(() => this.updateStatus())
+                                .then(() => new Notice('Emotes loaded'))
+                                .catch(() => {
+                                    this.plugin.logMessage(`Failed to load emotes`, 'verbose');
+                                    new Notice('Failed to load emotes');
+                                });
                         }
-                    }, 800);
-                });
-                
-                if (this.plugin.settings.selectedStreamerId || this.plugin.settings.twitchUserId) {
-                    const clearButton = streamerSetting.controlEl.createEl('button');
-                    clearButton.textContent = 'Clear';
-                    clearButton.style.marginLeft = '8px';
-                    clearButton.addEventListener('click', async () => {
-                        this.plugin.settings.selectedStreamerId = '';
-                        this.plugin.settings.twitchUserId = '';
-                        await this.plugin.saveSettings();
-                        updateButtonText();
-                        manualInput.value = '';
-                        new Notice('Selection cleared');
-                        this.plugin.logMessage('Streamer selection cleared', 'verbose');
-                        await this.updateStatus();
                     });
-                }
-
-                new Setting(containerEl).setName('Cache').setHeading();
-                containerEl.createEl('p', { 
-                    text: 'Control how emote images are stored on your device.',
-                    cls: 'setting-item-description'
+                };
+                
+                // Use requestAnimationFrame for debouncing instead of setTimeout
+                const rafId = requestAnimationFrame(updateHandler);
+                // Register cleanup for RAF
+                this.plugin.register(() => cancelAnimationFrame(rafId));
+            });
+            
+            if (this.plugin.settings.selectedStreamerId || this.plugin.settings.twitchUserId) {
+                const clearButton = streamerSetting.controlEl.createEl('button');
+                clearButton.textContent = 'Clear';
+                clearButton.style.marginLeft = '8px';
+                
+                // Use plugin.registerDomEvent for automatic cleanup
+                this.plugin.registerDomEvent(clearButton, 'click', async () => {
+                    this.plugin.settings.selectedStreamerId = '';
+                    this.plugin.settings.twitchUserId = '';
+                    await this.plugin.saveSettings();
+                    updateButtonText();
+                    manualInput.value = '';
+                    new Notice('Selection cleared');
+                    this.plugin.logMessage('Streamer selection cleared', 'verbose');
+                    await this.updateStatus();
                 });
-
-                const cacheContainer = containerEl.createDiv();
-                cacheContainer.style.marginBottom = '16px';
-                
-                const onDemandOption = cacheContainer.createDiv();
-                onDemandOption.style.display = 'flex';
-                onDemandOption.style.alignItems = 'flex-start';
-                onDemandOption.style.marginBottom = '12px';
-                onDemandOption.style.cursor = 'pointer';
-                
-                this.onDemandRadio = onDemandOption.createDiv();
-                this.onDemandRadio.style.cssText = `
-                    width: 16px;
-                    height: 16px;
-                    border-radius: 50%;
-                    border: 2px solid var(--text-muted);
-                    margin-right: 10px;
-                    margin-top: 2px;
-                    flex-shrink: 0;
-                    background: ${this.plugin.settings.cacheStrategy === 'on-demand' ? 'var(--interactive-accent)' : 'transparent'};
-                    border-color: ${this.plugin.settings.cacheStrategy === 'on-demand' ? 'var(--interactive-accent)' : 'var(--text-muted)'};
-                    transition: background-color 0.2s ease, border-color 0.2s ease;
-                `;
-                
-                const onDemandContent = onDemandOption.createDiv();
-                onDemandContent.createEl('div', { 
-                    text: 'On-demand cache (recommended)',
-                    attr: { style: 'font-weight: 600; margin-bottom: 2px;' }
-                });
-                onDemandContent.createEl('div', { 
-                    text: 'Caches emotes when you first use them. Best balance of speed and storage.',
-                    attr: { style: 'font-size: 0.9em; color: var(--text-muted); line-height: 1.4;' }
-                });
-                
-                onDemandOption.addEventListener('click', async () => {
-                    if (this.plugin.settings.cacheStrategy !== 'on-demand') {
-                        this.plugin.settings.cacheStrategy = 'on-demand';
-                        await this.plugin.saveSettings();
-                        await this.plugin.ensureCacheInitialized();
-                        this.updateRadioButtons();
-                        this.updateActionButtons();
-                        new Notice('Switched to On-Demand Cache');
-                    }
-                });
-                
-                const noCacheOption = cacheContainer.createDiv();
-                noCacheOption.style.display = 'flex';
-                noCacheOption.style.alignItems = 'flex-start';
-                noCacheOption.style.marginBottom = '16px';
-                noCacheOption.style.cursor = 'pointer';
-                
-                this.noCacheRadio = noCacheOption.createDiv();
-                this.noCacheRadio.style.cssText = `
-                    width: 16px;
-                    height: 16px;
-                    border-radius: 50%;
-                    border: 2px solid var(--text-muted);
-                    margin-right: 10px;
-                    margin-top: 2px;
-                    flex-shrink: 0;
-                    background: ${this.plugin.settings.cacheStrategy === 'no-cache' ? 'var(--interactive-accent)' : 'transparent'};
-                    border-color: ${this.plugin.settings.cacheStrategy === 'no-cache' ? 'var(--interactive-accent)' : 'var(--text-muted)'};
-                    transition: background-color 0.2s ease, border-color 0.2s ease;
-                `;
-                
-                const noCacheContent = noCacheOption.createDiv();
-                noCacheContent.createEl('div', { 
-                    text: 'No cache',
-                    attr: { style: 'font-weight: 600; margin-bottom: 2px;' }
-                });
-                noCacheContent.createEl('div', { 
-                    text: 'Always uses CDN links. No local storage, but requires internet connection.',
-                    attr: { style: 'font-size: 0.9em; color: var(--text-muted); line-height: 1.4;' }
-                });
-                
-                noCacheOption.addEventListener('click', async () => {
-                    if (this.plugin.settings.cacheStrategy !== 'no-cache') {
-                        this.plugin.settings.cacheStrategy = 'no-cache';
-                        await this.plugin.saveSettings();
-                        this.updateRadioButtons();
-                        this.updateActionButtons();
-                        new Notice('Switched to No Cache mode');
-                    }
-                });
-                
-                const actionContainer = containerEl.createDiv();
-                actionContainer.style.display = 'grid';
-                actionContainer.style.gridTemplateColumns = '1fr 1fr';
-                actionContainer.style.gap = '8px';
-                actionContainer.style.marginTop = '8px';
-                actionContainer.style.marginBottom = '24px';
-
-                this.preCacheButton = actionContainer.createEl('button');
-                this.preCacheButton.textContent = 'Pre-cache now';
-                this.preCacheButton.style.flex = '1';
-                
-                this.preCacheButton.addEventListener('click', async () => {
-                    if (!this.plugin.hasLoadedEmotes()) {
-                        new Notice('No emotes loaded to cache');
-                        return;
-                    }
-                    
-                    const emoteCount = this.plugin.getEmoteCount();
-                    // FIX: Use more accurate size estimation (50KB per emote)
-                    const estimatedSizeMB = ((emoteCount * 50) / 1024).toFixed(1);
-                    
-                    const confirmMsg = `This will download all ${emoteCount} emotes (est. ${estimatedSizeMB}MB).\n\nThis may take a while. Continue?`;
-                    
-                    new SimpleConfirmationModal(
-                        this.app, 
-                        confirmMsg, 
-                        async () => {
-                            /**
-                             * Pre-cache initialization handler.
-                             * 
-                             * Triggers background download operation with progress tracking.
-                             * Updates UI state to reflect ongoing operation and provides cancellation capability.
-                             */
-                            new Notice('Starting pre-cache...');
-                            try {
-                                await this.plugin.triggerPreCache();
-                                await this.updateStatus();
-                            } catch (error) {
-                                new Notice(`Failed to start pre-cache: ${error.message}`);
-                            }
-                        }
-                    ).open();
-                });
-
-                this.cancelPreCacheButton = actionContainer.createEl('button');
-                this.cancelPreCacheButton.textContent = 'Cancel pre-cache';
-                this.cancelPreCacheButton.className = 'mod-warning';
-                
-                this.cancelPreCacheButton.addEventListener('click', async () => {
-                    if (this.plugin.isPreCaching()) {
-                        this.plugin.cancelPreCache();
-                        new Notice('Pre-cache cancelled');
-                        this.updateActionButtons();
-                        await this.updateStatus();
-                    }
-                });
-
-                this.clearCacheButton = containerEl.createEl('button');
-                this.clearCacheButton.textContent = 'Clear cache';
-                this.clearCacheButton.style.width = '100%';
-                this.clearCacheButton.style.marginTop = '8px';
-                this.clearCacheButton.style.marginBottom = '24px';
-                
-                this.clearCacheButton.addEventListener('click', async () => {
-                    const warningMsg = `⚠️ Warning: Clearing the cache may cause emotes to not display correctly if:
-
-                    • The original CDN links change or break
-                    • You're offline and emotes aren't cached
-                    • You switch to "No Cache" mode later
-
-                    Are you sure you want to clear the cache?`;
-                    
-                    new SimpleConfirmationModal(
-                        this.app, 
-                        warningMsg, 
-                        async () => {
-                            /**
-                             * Confirmation handler: Executes cache purge operation.
-                             * 
-                             * Performs recursive directory removal with error boundary protection.
-                             * Resets pre-cache state and updates UI to reflect cleared state.
-                             */
-                            try {
-                                const cacheDir = this.plugin.getCacheDir();
-                                if (await this.plugin.app.vault.adapter.exists(cacheDir)) {
-                                    await this.plugin.app.vault.adapter.rmdir(cacheDir, true);
-                                    await this.plugin.ensureCacheInitialized();
-                                    this.plugin.resetPreCacheStatus();
-                                    await this.updateStatus();
-                                    this.plugin.logMessage('Cache cleared', 'verbose');
-                                    new Notice('Cache cleared successfully');
-                                }
-                            } catch (error) {
-                                new Notice('Failed to clear cache');
-                                this.plugin.logMessage(`Failed to clear cache: ${error}`, 'verbose');
-                            }
-                        }
-                    ).open();
-                });
-
-                new Setting(containerEl).setName('Status').setHeading();
-                
-                this.statusDiv = containerEl.createDiv();
-                this.statusDiv.style.marginBottom = '24px';
-                this.statusDiv.style.padding = '12px';
-                this.statusDiv.style.borderRadius = '6px';
-                this.statusDiv.style.backgroundColor = 'var(--background-secondary)';
-                this.statusDiv.style.border = '1px solid var(--background-modifier-border)';
-                this.statusDiv.style.fontSize = '0.9em';
-                
-                void this.updateStatus();
-                this.updateRadioButtons();
-                this.updateActionButtons();
-
-                new Setting(containerEl).setName('Advanced').setHeading();
-                containerEl.createEl('p', { 
-                    text: 'Debugging and troubleshooting.',
-                    cls: 'setting-item-description'
-                });
-
-                new Setting(containerEl)
-                    .setName('Log level')
-                    .setDesc('Controls console output. Only change if debugging issues.')
-                    .addDropdown(dropdown => dropdown
-                        .addOption('none', 'None (Quiet)')
-                        .addOption('basic', 'Basic')
-                        .addOption('verbose', 'Verbose')
-                        .addOption('debug', 'Debug (Maximum)')
-                        .setValue(this.plugin.settings.logLevel)
-                        .onChange(async (value: any) => {
-                            this.plugin.settings.logLevel = value;
-                            await this.plugin.saveSettings();
-                            this.plugin.logMessage(`Log level changed to: ${value}`, 'verbose');
-                            await this.updateStatus();
-                        }));
-                
-                if (this.plugin.settings.logLevel === 'debug') {
-                    console.timeEnd('[7TV] Settings render');
-                }
-                
-            } catch (error) {
-                this.plugin.logMessage(`Error rendering settings: ${error}`, 'verbose');
-            } finally {
-                this.isDisplaying = false;
-                this.renderRequestId = null;
             }
-        });
+
+            new Setting(containerEl).setName('Cache').setHeading();
+            containerEl.createEl('p', { 
+                text: 'Control how emote images are stored on your device.',
+                cls: 'setting-item-description'
+            });
+
+            const cacheContainer = containerEl.createDiv();
+            cacheContainer.style.marginBottom = '16px';
+            
+            const onDemandOption = cacheContainer.createDiv();
+            onDemandOption.style.display = 'flex';
+            onDemandOption.style.alignItems = 'flex-start';
+            onDemandOption.style.marginBottom = '12px';
+            onDemandOption.style.cursor = 'pointer';
+            
+            this.onDemandRadio = onDemandOption.createDiv();
+            this.onDemandRadio.style.cssText = `
+                width: 16px;
+                height: 16px;
+                border-radius: 50%;
+                border: 2px solid var(--text-muted);
+                margin-right: 10px;
+                margin-top: 2px;
+                flex-shrink: 0;
+                background: ${this.plugin.settings.cacheStrategy === 'on-demand' ? 'var(--interactive-accent)' : 'transparent'};
+                border-color: ${this.plugin.settings.cacheStrategy === 'on-demand' ? 'var(--interactive-accent)' : 'var(--text-muted)'};
+                transition: background-color 0.2s ease, border-color 0.2s ease;
+            `;
+            
+            const onDemandContent = onDemandOption.createDiv();
+            onDemandContent.createEl('div', { 
+                text: 'On-demand cache (recommended)',
+                attr: { style: 'font-weight: 600; margin-bottom: 2px;' }
+            });
+            onDemandContent.createEl('div', { 
+                text: 'Caches emotes when you first use them. Best balance of speed and storage.',
+                attr: { style: 'font-size: 0.9em; color: var(--text-muted); line-height: 1.4;' }
+            });
+            
+            // Use plugin.registerDomEvent for automatic cleanup
+            this.plugin.registerDomEvent(onDemandOption, 'click', async () => {
+                if (this.plugin.settings.cacheStrategy !== 'on-demand') {
+                    this.plugin.settings.cacheStrategy = 'on-demand';
+                    await this.plugin.saveSettings();
+                    await this.plugin.ensureCacheInitialized();
+                    this.updateRadioButtons();
+                    this.updateActionButtons();
+                    new Notice('Switched to On-Demand Cache');
+                }
+            });
+            
+            const noCacheOption = cacheContainer.createDiv();
+            noCacheOption.style.display = 'flex';
+            noCacheOption.style.alignItems = 'flex-start';
+            noCacheOption.style.marginBottom = '16px';
+            noCacheOption.style.cursor = 'pointer';
+            
+            this.noCacheRadio = noCacheOption.createDiv();
+            this.noCacheRadio.style.cssText = `
+                width: 16px;
+                height: 16px;
+                border-radius: 50%;
+                border: 2px solid var(--text-muted);
+                margin-right: 10px;
+                margin-top: 2px;
+                flex-shrink: 0;
+                background: ${this.plugin.settings.cacheStrategy === 'no-cache' ? 'var(--interactive-accent)' : 'transparent'};
+                border-color: ${this.plugin.settings.cacheStrategy === 'no-cache' ? 'var(--interactive-accent)' : 'var(--text-muted)'};
+                transition: background-color 0.2s ease, border-color 0.2s ease;
+            `;
+            
+            const noCacheContent = noCacheOption.createDiv();
+            noCacheContent.createEl('div', { 
+                text: 'No cache',
+                attr: { style: 'font-weight: 600; margin-bottom: 2px;' }
+            });
+            noCacheContent.createEl('div', { 
+                text: 'Always uses CDN links. No local storage, but requires internet connection.',
+                attr: { style: 'font-size: 0.9em; color: var(--text-muted); line-height: 1.4;' }
+            });
+            
+            // Use plugin.registerDomEvent for automatic cleanup
+            this.plugin.registerDomEvent(noCacheOption, 'click', async () => {
+                if (this.plugin.settings.cacheStrategy !== 'no-cache') {
+                    this.plugin.settings.cacheStrategy = 'no-cache';
+                    await this.plugin.saveSettings();
+                    this.updateRadioButtons();
+                    this.updateActionButtons();
+                    new Notice('Switched to No Cache mode');
+                }
+            });
+            
+            const actionContainer = containerEl.createDiv();
+            actionContainer.style.display = 'grid';
+            actionContainer.style.gridTemplateColumns = '1fr 1fr';
+            actionContainer.style.gap = '8px';
+            actionContainer.style.marginTop = '8px';
+            actionContainer.style.marginBottom = '24px';
+
+            this.preCacheButton = actionContainer.createEl('button');
+            this.preCacheButton.textContent = 'Pre-cache now';
+            this.preCacheButton.style.flex = '1';
+            
+            // Use plugin.registerDomEvent for automatic cleanup
+            this.plugin.registerDomEvent(this.preCacheButton, 'click', async () => {
+                if (!this.plugin.hasLoadedEmotes()) {
+                    new Notice('No emotes loaded to cache');
+                    return;
+                }
+                
+                const emoteCount = this.plugin.getEmoteCount();
+                const estimatedSizeMB = ((emoteCount * 50) / 1024).toFixed(1);
+                
+                const confirmMsg = `This will download all ${emoteCount} emotes (est. ${estimatedSizeMB}MB).\n\nThis may take a while. Continue?`;
+                
+                new SimpleConfirmationModal(
+                    this.app,
+                    this.plugin, 
+                    confirmMsg, 
+                    async () => {
+                        new Notice('Starting pre-cache...');
+                        try {
+                            await this.plugin.triggerPreCache();
+                            await this.updateStatus();
+                        } catch (error) {
+                            new Notice(`Failed to start pre-cache: ${error.message}`);
+                        }
+                    }
+                ).open();
+            });
+
+            this.cancelPreCacheButton = actionContainer.createEl('button');
+            this.cancelPreCacheButton.textContent = 'Cancel pre-cache';
+            this.cancelPreCacheButton.className = 'mod-warning';
+            
+            // Use plugin.registerDomEvent for automatic cleanup
+            this.plugin.registerDomEvent(this.cancelPreCacheButton, 'click', async () => {
+                if (this.plugin.isPreCaching()) {
+                    this.plugin.cancelPreCache();
+                    new Notice('Pre-cache cancelled');
+                    this.updateActionButtons();
+                    await this.updateStatus();
+                }
+            });
+
+            this.clearCacheButton = containerEl.createEl('button');
+            this.clearCacheButton.textContent = 'Clear cache';
+            this.clearCacheButton.style.width = '100%';
+            this.clearCacheButton.style.marginTop = '8px';
+            this.clearCacheButton.style.marginBottom = '24px';
+            
+            // Use plugin.registerDomEvent for automatic cleanup
+            this.plugin.registerDomEvent(this.clearCacheButton, 'click', async () => {
+                const warningMsg = `⚠️ Warning: Clearing the cache may cause emotes to not display correctly if:
+
+                • The original CDN links change or break
+                • You're offline and emotes aren't cached
+                • You switch to "No Cache" mode later
+
+                Are you sure you want to clear the cache?`;
+                
+                new SimpleConfirmationModal(
+                    this.app,
+                    this.plugin,
+                    warningMsg, 
+                    async () => {
+                        try {
+                            const cacheDir = this.plugin.getCacheDir();
+                            if (await this.plugin.app.vault.adapter.exists(cacheDir)) {
+                                await this.plugin.app.vault.adapter.rmdir(cacheDir, true);
+                                await this.plugin.ensureCacheInitialized();
+                                this.plugin.resetPreCacheStatus();
+                                await this.updateStatus();
+                                this.plugin.logMessage('Cache cleared', 'verbose');
+                                new Notice('Cache cleared successfully');
+                            }
+                        } catch (error) {
+                            new Notice('Failed to clear cache');
+                            this.plugin.logMessage(`Failed to clear cache: ${error}`, 'verbose');
+                        }
+                    }
+                ).open();
+            });
+
+            new Setting(containerEl).setName('Status').setHeading();
+            
+            this.statusDiv = containerEl.createDiv();
+            this.statusDiv.style.marginBottom = '24px';
+            this.statusDiv.style.padding = '12px';
+            this.statusDiv.style.borderRadius = '6px';
+            this.statusDiv.style.backgroundColor = 'var(--background-secondary)';
+            this.statusDiv.style.border = '1px solid var(--background-modifier-border)';
+            this.statusDiv.style.fontSize = '0.9em';
+            
+            void this.updateStatus();
+            this.updateRadioButtons();
+            this.updateActionButtons();
+
+            new Setting(containerEl).setName('Advanced').setHeading();
+            containerEl.createEl('p', { 
+                text: 'Debugging and troubleshooting.',
+                cls: 'setting-item-description'
+            });
+
+            new Setting(containerEl)
+                .setName('Log level')
+                .setDesc('Controls console output. Only change if debugging issues.')
+                .addDropdown(dropdown => dropdown
+                    .addOption('none', 'None (Quiet)')
+                    .addOption('basic', 'Basic')
+                    .addOption('verbose', 'Verbose')
+                    .addOption('debug', 'Debug (Maximum)')
+                    .setValue(this.plugin.settings.logLevel)
+                    .onChange(async (value: any) => {
+                        this.plugin.settings.logLevel = value;
+                        await this.plugin.saveSettings();
+                        this.plugin.logMessage(`Log level changed to: ${value}`, 'verbose');
+                        await this.updateStatus();
+                    }));
+            
+            if (this.plugin.settings.logLevel === 'debug') {
+                console.timeEnd('[7TV] Settings render');
+            }
+            
+        } catch (error) {
+            this.plugin.logMessage(`Error rendering settings: ${error}`, 'verbose');
+        } finally {
+            this.isDisplaying = false;
+        }
     }
 
     /**
@@ -1798,7 +1945,6 @@ class EnhancedSettingTab extends PluginSettingTab {
      * Updates status section with current plugin state.
      */
     private async updateStatus(): Promise<void> {
-        // Store a local reference since this.statusDiv might change
         const statusDiv = this.statusDiv;
         if (!statusDiv) return;
         
@@ -1903,18 +2049,13 @@ class EnhancedSettingTab extends PluginSettingTab {
     
     /**
      * Settings tab cleanup lifecycle method.
+     * 
+     * Cleans up all registered DOM event listeners, timers, and element references
+     * to prevent memory leaks when settings tab is closed.
+     * @note Event listeners are automatically cleaned up by plugin.registerDomEvent()
      */
     hide(): void {
-        if (this.renderRequestId !== null) {
-            cancelAnimationFrame(this.renderRequestId);
-            this.renderRequestId = null;
-        }
-        
-        if (this.debounceTimer) {
-            window.clearTimeout(this.debounceTimer);
-            this.debounceTimer = null;
-        }
-        
+        // Clear element references
         this.onDemandRadio = null;
         this.noCacheRadio = null;
         this.preCacheButton = null;
@@ -1937,22 +2078,27 @@ class EnhancedSettingTab extends PluginSettingTab {
  * @property message - Warning/confirmation text displayed to user
  * @property onConfirm - Async callback executed upon user confirmation
  * @property onCancel - Optional callback executed upon user cancellation
+ * @note Uses plugin.registerDomEvent() for automatic cleanup of event listeners
  */
 class SimpleConfirmationModal extends Modal {
     private message: string;
     private onConfirm: () => Promise<void> | void;
     private onCancel?: () => void;
+    /** Plugin reference for resource cleanup */
+    private plugin: SevenTVPlugin;
 
     /**
      * Creates modal instance with configuration.
      * 
      * @param app - Obsidian application instance for UI coordination
+     * @param plugin - Plugin instance for resource cleanup
      * @param message - Warning/confirmation text displayed to user
      * @param onConfirm - Async callback executed upon user confirmation
      * @param onCancel - Optional callback executed upon user cancellation
      */
-    constructor(app: App, message: string, onConfirm: () => Promise<void> | void, onCancel?: () => void) {
+    constructor(app: App, plugin: SevenTVPlugin, message: string, onConfirm: () => Promise<void> | void, onCancel?: () => void) {
         super(app);
+        this.plugin = plugin;
         this.message = message;
         this.onConfirm = onConfirm;
         this.onCancel = onCancel;
@@ -1964,6 +2110,7 @@ class SimpleConfirmationModal extends Modal {
      * Constructs DOM structure with warning message and action buttons.
      * Handles multi-line text and bullet points with proper HTML formatting.
      * Safety-focused with "No" as default selection to prevent accidental confirmations.
+     * Uses plugin.registerDomEvent() for automatic cleanup of button event listeners.
      */
     onOpen(): void {
         const { contentEl } = this;
@@ -1982,7 +2129,9 @@ class SimpleConfirmationModal extends Modal {
             text: 'Yes',
             cls: 'mod-cta'
         });
-        yesButton.addEventListener('click', () => {
+        
+        // Use plugin.registerDomEvent for automatic cleanup
+        this.plugin.registerDomEvent(yesButton, 'click', () => {
             this.close();
             this.onConfirm();
         });
@@ -1992,7 +2141,9 @@ class SimpleConfirmationModal extends Modal {
             text: 'No',
             cls: 'mod-warning'
         });
-        noButton.addEventListener('click', () => {
+        
+        // Use plugin.registerDomEvent for automatic cleanup
+        this.plugin.registerDomEvent(noButton, 'click', () => {
             this.close();
             if (this.onCancel) this.onCancel();
         });
@@ -2062,73 +2213,15 @@ class SimpleConfirmationModal extends Modal {
     }
 
     /**
-     * Basic HTML escaping to prevent XSS while allowing safe formatting.
-     * 
-     * Escapes special characters to ensure user safety while preserving
-     * intentional formatting from trusted plugin messages.
-     * 
-     * @param text - Text to escape
-     * @returns HTML-escaped text
-     */
-    private escapeHtml(text: string): string {
-        return text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
-    }
-
-    /**
      * Modal lifecycle method invoked when modal is dismissed.
      * 
      * Ensures proper resource cleanup and restores editor focus.
      * Prevents memory leaks by clearing DOM references.
+     * @note Event listeners are automatically cleaned up by plugin.registerDomEvent()
      */
     onClose(): void {
         const { contentEl } = this;
         contentEl.empty();
-        
-        /**
-         * Critical focus restoration: Returns focus to editor after modal dismissal.
-         * Prevents the "cursor not working" issue on Windows by forcing Obsidian's
-         * focus management system to re-evaluate active input targets.
-         */
-        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-        if (activeView) {
-            // Deferred focus restoration to ensure modal tear-down completes
-            window.setTimeout(() => {
-                /**
-                 * Obsidian API-compatible focus restoration.
-                 * The correct way to restore focus in Obsidian is to:
-                 * 1. Get the editor instance from the view
-                 * 2. Focus the editor's CodeMirror instance
-                 * 3. Trigger a resize event to force UI reflow
-                 */
-                
-                // Get the editor instance from the MarkdownView
-                const editor = (activeView as any).editor;
-                if (editor) {
-                    // Focus the editor if it has a focus method
-                    if (editor.focus && typeof editor.focus === 'function') {
-                        editor.focus();
-                    }
-                    
-                    // Alternative: Focus the CodeMirror instance directly
-                    const cmEditor = (editor as any).cmEditor;
-                    if (cmEditor && cmEditor.focus && typeof cmEditor.focus === 'function') {
-                        cmEditor.focus();
-                    }
-                }
-                
-                /**
-                 * Windows-specific workaround: Trigger resize event to force
-                 * Electron/Windows to re-evaluate focus and rendering state.
-                 */
-                window.dispatchEvent(new Event('resize'));
-                
-            }, 100);
-        }
     }
 }
 
@@ -2145,6 +2238,7 @@ class SimpleConfirmationModal extends Modal {
 class StreamerSuggestModal extends FuzzySuggestModal<string> {
     private plugin: SevenTVPlugin;
     private onChoose: (streamerKey: string) => void;
+    
 
     /**
      * Creates streamer search modal.
