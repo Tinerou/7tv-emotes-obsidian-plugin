@@ -9,6 +9,34 @@ Integrate 7TV emotes directly into your Obsidian notes with auto-complete sugges
 - **Local caching**: Emotes are saved locally for offline viewing and long-term reliability (must still have internet connection to place emotes reliably).
 - **Inline display**: Emotes display properly inline with text.
 
+## 🧱 File structure
+
+```text
+index.ts                         # Plugin entry point
+src/
+  types.ts                       # Settings and shared types
+  logger.ts                      # Log-level aware logger
+  api.ts                         # 7TV API fetch logic
+  utils.ts                       # Shared helpers (bytes + emote DOM)
+  DownloadProgressTracker.ts     # Pre-cache progress UI
+  EmoteSuggest.ts                # Editor autocomplete suggester
+  SettingsTab.ts                 # Settings UI and reactive status
+  StreamerSuggestModal.ts        # Fuzzy streamer picker modal
+  SimpleConfirmationModal.ts     # Reusable confirmation modal
+styles.css                       # Shared plugin + settings styles
+```
+
+## 🔒 Network and privacy disclosure
+
+This plugin uses network requests only to load emote data and images from 7TV:
+
+- `https://7tv.io/v3/users/twitch/<twitch-id>` to resolve the emote set for the selected Twitch ID.
+- `https://7tv.io/v3/emote-sets/<emote-set-id>` to fetch emote metadata.
+- `https://cdn.7tv.app/emote/<emote-id>/1x.webp` to load/download emote images.
+
+The plugin sends only the configured Twitch numeric ID and normal image requests needed to display or cache emotes.  
+It does not include telemetry, analytics, ads, or remote code execution.
+
 ## 📦 Installation
 
 ### Manual Installation

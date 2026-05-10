@@ -1,5 +1,11 @@
 /* styles.css - 7TV Emotes for Obsidian Plugin */
 
+.seven-tv-inline-emote {
+	display: inline-block;
+	height: 1.5em;
+	vertical-align: middle;
+}
+
 /* Main container */
 .seven-tv-download-progress {
     position: fixed;
@@ -206,4 +212,102 @@
     color: var(--text-muted);
     font-family: var(--font-monospace);
     font-size: 0.9em;
+}
+
+/* Settings */
+.seven-tv-settings-root .setting-item {
+	border-top: none;
+	padding-top: 8px;
+	padding-bottom: 8px;
+}
+
+.seven-tv-streamer-select-button {
+	max-width: 240px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.seven-tv-manual-id-input {
+	min-width: 140px;
+}
+
+.seven-tv-cache-actions {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 8px;
+}
+
+.seven-tv-cache-actions .setting-item-control {
+	width: 100%;
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 8px;
+}
+
+.seven-tv-cache-actions .setting-item-control button {
+	width: 100%;
+}
+
+.seven-tv-status-box {
+	margin: 8px 0 24px;
+	padding: 12px;
+	border-radius: 6px;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+}
+
+.seven-tv-status-row {
+	margin-bottom: 8px;
+}
+
+.seven-tv-status-row:last-child {
+	margin-bottom: 0;
+}
+
+.seven-tv-status-label {
+	font-weight: 600;
+	margin-bottom: 2px;
+}
+
+.seven-tv-status-value {
+	color: var(--text-muted);
+	font-size: 0.9em;
+}
+
+.seven-tv-status-banner {
+	margin-top: 8px;
+	padding: 8px;
+	border-radius: 4px;
+	background: var(--background-modifier-success);
+	font-size: 0.85em;
+}
+
+.seven-tv-hidden {
+	display: none !important;
+}
+
+/* Confirmation modal */
+.seven-tv-modal-message-container {
+	margin-bottom: 12px;
+}
+
+.seven-tv-modal-paragraph {
+	margin: 10px 0;
+}
+
+.seven-tv-modal-bullet-list {
+	margin: 10px 0;
+	padding-left: 20px;
+}
+
+.seven-tv-modal-bullet-list li {
+	margin: 4px 0;
+}
+
+.seven-tv-modal-actions .setting-item-control {
+	display: flex;
+	gap: 8px;
+	justify-content: flex-end;
+	width: 100%;
 }
