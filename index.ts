@@ -1,6 +1,7 @@
 import { Editor, normalizePath, Notice, Plugin } from 'obsidian';
 import { fetchEmotesForTwitchId } from './src/api';
 import { DownloadProgressTracker } from './src/DownloadProgressTracker';
+import { buildEmoteEditorExtension } from './src/EmoteEditorExtension';
 import { EmoteSuggest } from './src/EmoteSuggest';
 import { PluginLogger } from './src/logger';
 import { SettingsTab } from './src/SettingsTab';
@@ -55,6 +56,7 @@ export default class SevenTVPlugin extends Plugin {
 
 		this.emoteSuggest = new EmoteSuggest(this.app, this);
 		this.registerEditorSuggest(this.emoteSuggest);
+		this.registerEditorExtension(buildEmoteEditorExtension(this));
 
 		const activeId = this.getActiveTwitchId();
 		if (activeId) {
@@ -237,6 +239,10 @@ export default class SevenTVPlugin extends Plugin {
 	async saveSettings(): Promise<void> {
 		await this.saveData(this.settings);
 		this.notifyStateChange();
+	}
+
+	refreshEditorExtensions(): void {
+		this.app.workspace.updateOptions();
 	}
 
 	private notifyStateChange(): void {

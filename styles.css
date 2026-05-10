@@ -1,5 +1,18 @@
 /* styles.css - 7TV Emotes for Obsidian Plugin */
 
+/*
+ * Skip layout, paint, and animation for off-screen emotes. This stops
+ * animated WebPs from running on the main thread when they aren't visible,
+ * which keeps long notes with many emotes from accumulating decode/paint
+ * pressure over time. The `auto` keyword on contain-intrinsic-size lets the
+ * browser remember each emote's last-rendered size, so scrolling it back
+ * into view doesn't cause a layout jump.
+ */
+.seven-tv-emote {
+	content-visibility: auto;
+	contain-intrinsic-size: auto 1.5em 1.5em;
+}
+
 .seven-tv-inline-emote {
 	display: inline-block;
 	height: 1.5em;

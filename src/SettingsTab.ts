@@ -46,6 +46,7 @@ export class SettingsTab extends PluginSettingTab {
 		this.renderStreamerSection(containerEl);
 		this.renderCacheSection(containerEl);
 		this.renderStatusSection(containerEl);
+		this.renderEditorSection(containerEl);
 		this.renderAdvancedSection(containerEl);
 		this.subscribeToState();
 
@@ -208,6 +209,22 @@ Are you sure you want to clear the cache?`;
 		this.statusRows.preCache = this.createStatusRow('Pre-cache');
 		this.statusBanner = this.statusDiv.createDiv({ cls: 'seven-tv-status-banner seven-tv-hidden' });
 		this.statusBanner.setText('⏳ Download in progress. Check the top-right corner for progress.');
+	}
+
+	private renderEditorSection(containerEl: HTMLElement): void {
+		new Setting(containerEl).setName('Editor').setHeading();
+		new Setting(containerEl)
+			.setName('Compact emote display in editor')
+			.setDesc('In Live Preview, replace inserted emote HTML with :name: when the cursor lands on it, so emotes act as a single unit you can select and delete in one stroke. Disable this to see the raw HTML when focused.')
+			.addToggle((toggle) => {
+				toggle
+					.setValue(this.plugin.settings.compactEditorDisplay)
+					.onChange(async (value) => {
+						this.plugin.settings.compactEditorDisplay = value;
+						await this.plugin.saveSettings();
+						this.plugin.refreshEditorExtensions();
+					});
+			});
 	}
 
 	private renderAdvancedSection(containerEl: HTMLElement): void {

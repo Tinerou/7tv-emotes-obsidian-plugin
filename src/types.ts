@@ -13,6 +13,7 @@ export interface SevenTVSettings {
 	cacheStrategy: CacheStrategy;
 	logLevel: LogLevel;
 	builtInStreamers: StreamerDefinition[];
+	compactEditorDisplay: boolean;
 }
 
 export const DEFAULT_SETTINGS: SevenTVSettings = {
@@ -20,5 +21,6 @@ export const DEFAULT_SETTINGS: SevenTVSettings = {
 	selectedStreamerId: '',
 	cacheStrategy: 'on-demand',
 	logLevel: 'none',
-	builtInStreamers: []
+	builtInStreamers: [],
+	compactEditorDisplay: true
 };
