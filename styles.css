@@ -72,6 +72,7 @@
 
 .seven-tv-progress-bar {
     height: 100%;
+    width: var(--seven-tv-progress, 0%);
     background: var(--interactive-accent);
     transition: width 0.3s ease;
 }

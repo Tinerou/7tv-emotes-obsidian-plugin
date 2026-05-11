@@ -1,3 +1,4 @@
+import { requestUrl } from 'obsidian';
 import { PluginLogger } from './logger';
 
 const REQUEST_TIMEOUT_MS = 6000;
@@ -45,21 +46,26 @@ export async function fetchEmotesForTwitchId(
 }
 
 async function fetchJsonWithTimeout(url: string, timeoutMs: number): Promise<any> {
-	const controller = new AbortController();
-	const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+	let timeoutId: number | null = null;
+	const timeoutPromise = new Promise<never>((_, reject) => {
+		timeoutId = window.setTimeout(
+			() => reject(new Error(`Request timed out after ${timeoutMs}ms`)),
+			timeoutMs
+		);
+	});
 
 	try {
-		const response = await fetch(url, { signal: controller.signal });
-		if (!response.ok) {
+		const response = await Promise.race([
+			requestUrl({ url, throw: false }),
+			timeoutPromise
+		]);
+		if (response.status < 200 || response.status >= 300) {
 			throw new Error(`HTTP ${response.status}`);
 		}
-		return response.json();
-	} catch (error) {
-		if (error instanceof DOMException && error.name === 'AbortError') {
-			throw new Error(`Request timed out after ${timeoutMs}ms`);
-		}
-		throw error;
+		return response.json;
 	} finally {
-		window.clearTimeout(timeoutId);
+		if (timeoutId !== null) {
+			window.clearTimeout(timeoutId);
+		}
 	}
 }

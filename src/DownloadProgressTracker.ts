@@ -206,8 +206,7 @@ export class DownloadProgressTracker {
 
 		const footer = this.statusBarEl.createDiv({ cls: 'seven-tv-progress-footer' });
 		this.domRefs.timer = footer.createSpan({ cls: 'seven-tv-timer' });
-		this.domRefs.failedInfo = footer.createSpan({ cls: 'seven-tv-failed-info' });
-		this.domRefs.failedInfo.style.display = 'none';
+		this.domRefs.failedInfo = footer.createSpan({ cls: 'seven-tv-failed-info seven-tv-hidden' });
 
 		const cancelButton = footer.createEl('button', {
 			cls: 'seven-tv-cancel-button mod-warning',
@@ -248,18 +247,17 @@ export class DownloadProgressTracker {
 		this.domRefs.progressText?.setText(`Progress: ${this.downloadedEmotes}/${this.totalEmotes}`);
 		this.domRefs.progressPercent?.setText(`${progress.toFixed(1)}%`);
 		if (this.domRefs.progressBar) {
-			this.domRefs.progressBar.style.width = `${progress}%`;
+			this.domRefs.progressBar.style.setProperty('--seven-tv-progress', `${progress}%`);
 		}
 		this.domRefs.sizeText?.setText(`${formatBytes(this.downloadedBytes)} / ${formatBytes(this.totalBytes)}`);
 		this.domRefs.speedText?.setText(`${formatBytes(speed)}/s`);
 		this.domRefs.timer?.setText(`⏱️ ${elapsedSeconds}s`);
 
 		if (this.domRefs.failedInfo) {
-			if (this.failedEmotes > 0) {
+			const hasFailures = this.failedEmotes > 0;
+			this.domRefs.failedInfo.toggleClass('seven-tv-hidden', !hasFailures);
+			if (hasFailures) {
 				this.domRefs.failedInfo.setText(`❌ ${this.failedEmotes} failed`);
-				this.domRefs.failedInfo.style.display = 'inline';
-			} else {
-				this.domRefs.failedInfo.style.display = 'none';
 			}
 		}
 	}

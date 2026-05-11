@@ -1,4 +1,4 @@
-import { Editor, normalizePath, Notice, Plugin } from 'obsidian';
+import { Editor, normalizePath, Notice, Plugin, requestUrl } from 'obsidian';
 import { fetchEmotesForTwitchId } from './src/api';
 import { DownloadProgressTracker } from './src/DownloadProgressTracker';
 import { buildEmoteEditorExtension } from './src/EmoteEditorExtension';
@@ -291,9 +291,12 @@ export default class SevenTVPlugin extends Plugin {
 
 	private async insertWithOnDemandCache(editor: Editor, name: string, id: string): Promise<void> {
 		const cacheRelativePath = normalizePath(`${this.CACHE_DIR}/${id}.webp`);
-		const cacheResourceUrl = this.app.vault.adapter.getResourcePath(cacheRelativePath);
+		const cacheFile = this.app.vault.getFileByPath(cacheRelativePath);
+		const cacheResourceUrl = cacheFile
+			? this.app.vault.getResourcePath(cacheFile)
+			: this.app.vault.adapter.getResourcePath(cacheRelativePath);
 		const cdnUrl = `https://cdn.7tv.app/emote/${id}/1x.webp`;
-		const isCached = this.pathExists(cacheRelativePath);
+		const isCached = cacheFile !== null;
 
 		const pictureHtml = createOnDemandEmoteHtml({
 			name,
@@ -397,12 +400,15 @@ export default class SevenTVPlugin extends Plugin {
 		destPath: string,
 		signal?: AbortSignal
 	): Promise<number> {
-		const response = await fetch(sourceUrl, signal ? { signal } : undefined);
-		if (!response.ok) {
+		if (signal?.aborted) {
+			throw new DOMException('Download cancelled', 'AbortError');
+		}
+		const response = await requestUrl({ url: sourceUrl, throw: false });
+		if (response.status < 200 || response.status >= 300) {
 			throw new Error(`HTTP ${response.status}`);
 		}
 
-		const arrayBuffer = await response.arrayBuffer();
+		const arrayBuffer = response.arrayBuffer;
 		await this.ensureCacheInitialized();
 		const existingFile = this.app.vault.getFileByPath(destPath);
 		if (existingFile) {
