@@ -1,96 +1,79 @@
 # 7TV Emotes for Obsidian
 
-Integrate 7TV emotes directly into your Obsidian notes with auto-complete suggestions, streamer-specific emote sets, and local caching for offline reliability.
+Use [7TV](https://7tv.app/) emotes directly inside your Obsidian notes. Type `:` and a few letters, pick an emote from the popup, and it shows up inline with your text — just like on Twitch or Discord.
 
+> **New to 7TV?** 7TV is a popular emote extension used in Twitch chats. It lets streamers and viewers share custom animated and static emotes (like `:HUH:`, `:pog:`, `:KEKW:`). This plugin brings those same emotes into your notes.
+
+<picture class="seven-tv-emote"><source srcset="app://9f3827291073f9eebb190441d254a732a5a9/Users/treybrown/Documents/7tv-test-vault/_7tv-emotes-cache/01GEMGQ08R0005045RDHFPSRYY.webp?1778092446939" type="image/webp"><source srcset="https://cdn.7tv.app/emote/01GEMGQ08R0005045RDHFPSRYY/1x.webp" type="image/webp"><img class="seven-tv-inline-emote" loading="lazy" decoding="async" src="https://cdn.7tv.app/emote/01GEMGQ08R0005045RDHFPSRYY/1x.webp" alt=":EDM:" title=":EDM:"></picture><picture class="seven-tv-emote"><source srcset="app://9f3827291073f9eebb190441d254a732a5a9/Users/treybrown/Documents/7tv-test-vault/_7tv-emotes-cache/01G1GXCR380004YN3NKDRR9QHD.webp?1778092456342" type="image/webp"><source srcset="https://cdn.7tv.app/emote/01G1GXCR380004YN3NKDRR9QHD/1x.webp" type="image/webp"><img class="seven-tv-inline-emote" loading="lazy" decoding="async" src="https://cdn.7tv.app/emote/01G1GXCR380004YN3NKDRR9QHD/1x.webp" alt=":wideVIBE:" title=":wideVIBE:"></picture><picture class="seven-tv-emote"><source srcset="app://9f3827291073f9eebb190441d254a732a5a9/Users/treybrown/Documents/7tv-test-vault/_7tv-emotes-cache/01GEMGQ08R0005045RDHFPSRYY.webp?1778092446939" type="image/webp"><source srcset="https://cdn.7tv.app/emote/01GEMGQ08R0005045RDHFPSRYY/1x.webp" type="image/webp"><img class="seven-tv-inline-emote" loading="lazy" decoding="async" src="https://cdn.7tv.app/emote/01GEMGQ08R0005045RDHFPSRYY/1x.webp" alt=":EDM:" title=":EDM:"></picture>
 ## ✨ Features
 
-- **Auto-complete suggestions**: Type `:` followed by an emote name to see suggestions with preview images. Must press `ENTER` or click on desired emote.
-- **Streamer emote sets**: Pulled from their emote sets on https://7tv.app/.
-- **Local caching**: Emotes are saved locally for offline viewing and long-term reliability (must still have internet connection to place emotes reliably).
-- **Inline display**: Emotes display properly inline with text.
+- **Type-to-suggest** — Start typing `:` followed by an emote name and a preview popup appears. Hit `Enter` or click to insert.
+- **Per-streamer emote sets** — Pull in the emote set of any streamer registered on [7tv.app](https://7tv.app/).
+- **Local caching** — Emotes are saved to your vault so they keep working offline and won't break if a CDN link changes.
+- **Inline rendering** — Emotes display cleanly inline with your text, not as separate blocks.
 
-## 🧱 File structure
+## 📸 Preview
 
-```text
-index.ts                         # Plugin entry point
-src/
-  types.ts                       # Settings and shared types
-  logger.ts                      # Log-level aware logger
-  api.ts                         # 7TV API fetch logic
-  utils.ts                       # Shared helpers (bytes + emote DOM)
-  DownloadProgressTracker.ts     # Pre-cache progress UI
-  EmoteSuggest.ts                # Editor autocomplete suggester
-  SettingsTab.ts                 # Settings UI and reactive status
-  StreamerSuggestModal.ts        # Fuzzy streamer picker modal
-  SimpleConfirmationModal.ts     # Reusable confirmation modal
-styles.css                       # Shared plugin + settings styles
-```
-
-## 🔒 Network and privacy disclosure
-
-This plugin uses network requests only to load emote data and images from 7TV:
-
-- `https://7tv.io/v3/users/twitch/<twitch-id>` to resolve the emote set for the selected Twitch ID.
-- `https://7tv.io/v3/emote-sets/<emote-set-id>` to fetch emote metadata.
-- `https://cdn.7tv.app/emote/<emote-id>/1x.webp` to load/download emote images.
-
-The plugin sends only the configured Twitch numeric ID and normal image requests needed to display or cache emotes.  
-It does not include telemetry, analytics, ads, or remote code execution.
+*(Screenshot or GIF coming soon — drop one in here to show the autocomplete popup in action.)*
 
 ## 📦 Installation
 
 ### Manual Installation
-1. Download the latest release from https://github.com/Tinerou/7tv-emotes-obsidian-plugin/releases
-2. Extract the files to your vault's `.obsidian/plugins/7tv-emotes/` folder
-3. Enable the plugin in Obsidian: Settings → Community plugins → 7TV Emotes
+1. Download the latest release from the [GitHub releases page](https://github.com/Tinerou/7tv-emotes-obsidian-plugin).
+2. Extract the files into your vault's `.obsidian/plugins/7tv-emotes/` folder.
+3. In Obsidian, go to **Settings → Community plugins → 7TV Emotes** and toggle it on.
 
 ### From Obsidian Community Plugins
-*(Coming soon)*
+*Coming soon.*
 
 ## ⚙️ Setup
 
-### 1. Configure a Streamer's Emote Set
-1. Open Obsidian Settings
-2. Navigate to "7TV Emotes" in the plugin settings
-3. Simply search for a streamer in the drop down menu or manually enter the **numeric Twitch ID** of the streamer whose emotes you want to use
-	- **Not their username** - you need the numeric ID
-	- You can often find these online using a converter.
-4. All set. Have fun using the emotes!
+### 1. Pick a streamer
+1. Open **Settings → 7TV Emotes**.
+2. Search for a streamer in the dropdown, **or** paste in their **numeric Twitch ID** manually.
+   - This is the numeric user ID, **not** their Twitch username.
+   - You can look it up with any "Twitch username to ID" converter online.
+3. That's it — start typing `:` in any note to use their emotes.
 
+### 2. About the cache folder
+The plugin creates a `_7tv-emotes-cache/` folder in your vault automatically. This folder:
+- Stores emote images locally so they work offline.
+- Keeps your notes intact even if a 7TV CDN link changes down the road.
+- Lets others view your vault with the emotes already rendered, even without the plugin installed.
 
-### 2. Understanding the Cache
-The plugin automatically creates a `_7tv-emotes-cache/` folder in your vault. This:
-- Stores emote images locally for offline use
-- Ensures notes remain functional even if 7TV CDN links change
-- Makes shared vaults viewable without requiring the plugin
+You can safely commit this folder to a synced/shared vault.
 
 ## 🚀 Usage
 
-### Emote Insertion
-1. In any note, type `:` followed by an emote name
-   - Example: `:HU` (will suggest `:HUH:`)
-2. A suggestion popup will appear showing emote images and codes
-3. Press `Enter` to select an emote, or click with your mouse
-4. The typed text (`:HUH:`) will be replaced with the emote image
+1. In any note, type `:` followed by the start of an emote name (e.g. `:HU`).
+2. A popup appears showing matching emotes with previews.
+3. Press `Enter` (or click) to insert the one you want.
+4. The text gets replaced with the emote image inline.
 
-## 🎯 Examples
+### Example
 
-### Inline with Text
 ```markdown
-I can't wait to use emotes on Obsidian! :pog:
-Now you :pogU: yes you :pogU: can use emotes on Obsidian!
+I can't wait to use emotes in Obsidian! :pog:
 ```
-<img width="358" height="51" alt="image" src="https://github.com/user-attachments/assets/9351e88b-95f0-4360-a217-f7ea3778a8e4" />
 
-Note: At this point in time you must have to click emote preview or press `ENTER` to insert emote.
+## ❓ FAQ / Troubleshooting
 
-## 😢 Limitations
-- Long HTML when inputting emotes (you do not see this regularly but if you cursor is on it you will notice, also takes longer to `backspace` to remove emote.
-- Precaching emotes takes long due to 7TV limititions.
-- Must press `Enter` or click with mouse to insert emote.
-- Requires internet connection to insert emotes.
-- Emotes tend to take a decent amount of storage. Most are between 5KB-180KB.
-- Emotes lag while being downloaded from 7TV (Reason to use precaching).
-Note: Hopefully we can improve/change some of these in the future.
+**The popup isn't appearing when I type `:`**
+Make sure the plugin is enabled in Community plugins and that you've configured a streamer's Twitch ID in the settings.
 
+**Emotes aren't loading / show as broken images**
+You'll need an internet connection the first time an emote is inserted so it can be downloaded into the cache. Once cached, it works offline.
 
+**I entered a username instead of a numeric ID and nothing works**
+The settings field expects a **numeric** Twitch user ID, not a username. Use any online "Twitch username to user ID" tool to convert it.
+
+**Can I use multiple streamers' emote sets at once?**
+Currently the plugin loads one streamer's set at a time. Multi-set support may come in a future release.
+
+## 🤝 Contributing
+
+Bug reports, feature requests, and PRs are welcome — open an issue on the [GitHub repo](https://github.com/Tinerou/7tv-emotes-obsidian-plugin).
+
+## 📄 License
+
+Released under the MIT License. See `LICENSE` for details.
