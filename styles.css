@@ -13,10 +13,24 @@
 	contain-intrinsic-size: auto 1.5em 1.5em;
 }
 
-.seven-tv-inline-emote {
-	display: inline-block;
-	height: 1.5em;
-	vertical-align: middle;
+/*
+ * Defensive overrides for inline emote images. Some Obsidian themes and CSS
+ * snippets style `img` aggressively (display: block, mix-blend-mode, auto
+ * margins, max-width caps) to make embedded note images render as figures.
+ * Those rules would push emotes onto their own line, blend them into the
+ * page background, or cap their width. The tag+class selector matches the
+ * specificity of `.theme-dark img` / `.theme-light img` snippet rules, and
+ * the !important flags ensure inline emote rendering wins regardless of
+ * the active theme or user snippets.
+ */
+img.seven-tv-inline-emote {
+	display: inline-block !important;
+	height: 1.5em !important;
+	max-width: none !important;
+	margin: 0 !important;
+	vertical-align: middle !important;
+	mix-blend-mode: normal !important;
+	filter: none !important;
 }
 
 /* Main container */
@@ -72,7 +86,6 @@
 
 .seven-tv-progress-bar {
     height: 100%;
-    width: var(--seven-tv-progress, 0%);
     background: var(--interactive-accent);
     transition: width 0.3s ease;
 }
