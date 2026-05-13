@@ -7,14 +7,10 @@ Use [7TV](https://7tv.app/) emotes directly inside your Obsidian notes. Type `:`
 <picture class="seven-tv-emote"><source srcset="app://9f3827291073f9eebb190441d254a732a5a9/Users/treybrown/Documents/7tv-test-vault/_7tv-emotes-cache/01GEMGQ08R0005045RDHFPSRYY.webp?1778092446939" type="image/webp"><source srcset="https://cdn.7tv.app/emote/01GEMGQ08R0005045RDHFPSRYY/1x.webp" type="image/webp"><img class="seven-tv-inline-emote" loading="lazy" decoding="async" src="https://cdn.7tv.app/emote/01GEMGQ08R0005045RDHFPSRYY/1x.webp" alt=":EDM:" title=":EDM:"></picture><picture class="seven-tv-emote"><source srcset="app://9f3827291073f9eebb190441d254a732a5a9/Users/treybrown/Documents/7tv-test-vault/_7tv-emotes-cache/01G1GXCR380004YN3NKDRR9QHD.webp?1778092456342" type="image/webp"><source srcset="https://cdn.7tv.app/emote/01G1GXCR380004YN3NKDRR9QHD/1x.webp" type="image/webp"><img class="seven-tv-inline-emote" loading="lazy" decoding="async" src="https://cdn.7tv.app/emote/01G1GXCR380004YN3NKDRR9QHD/1x.webp" alt=":wideVIBE:" title=":wideVIBE:"></picture><picture class="seven-tv-emote"><source srcset="app://9f3827291073f9eebb190441d254a732a5a9/Users/treybrown/Documents/7tv-test-vault/_7tv-emotes-cache/01GEMGQ08R0005045RDHFPSRYY.webp?1778092446939" type="image/webp"><source srcset="https://cdn.7tv.app/emote/01GEMGQ08R0005045RDHFPSRYY/1x.webp" type="image/webp"><img class="seven-tv-inline-emote" loading="lazy" decoding="async" src="https://cdn.7tv.app/emote/01GEMGQ08R0005045RDHFPSRYY/1x.webp" alt=":EDM:" title=":EDM:"></picture>
 ## ✨ Features
 
-- **Type-to-suggest** — Start typing `:` followed by an emote name and a preview popup appears. Hit `Enter` or click to insert.
+- **Type-to-suggest** — Start typing `:` followed by an emote name and a preview popup appears. Hit `Enter` or click to insert. <picture class="seven-tv-emote"><source srcset="https://cdn.7tv.app/emote/01FBZESCNR000A6AWCB1X558GZ/1x.webp" type="image/webp"><source srcset="app://9f3827291073f9eebb190441d254a732a5a9/Users/treybrown/Documents/7tv-test-vault/_7tv-emotes-cache/01FBZESCNR000A6AWCB1X558GZ.webp?1778709241230" type="image/webp"><img class="seven-tv-inline-emote" loading="lazy" decoding="async" src="https://cdn.7tv.app/emote/01FBZESCNR000A6AWCB1X558GZ/1x.webp" alt=":Chatting:" title=":Chatting:"></picture>
 - **Per-streamer emote sets** — Pull in the emote set of any streamer registered on [7tv.app](https://7tv.app/).
 - **Local caching** — Emotes are saved to your vault so they keep working offline and won't break if a CDN link changes.
 - **Inline rendering** — Emotes display cleanly inline with your text, not as separate blocks.
-
-## 📸 Preview
-
-*(Screenshot or GIF coming soon — drop one in here to show the autocomplete popup in action.)*
 
 ## 📦 Installation
 
@@ -33,7 +29,7 @@ Use [7TV](https://7tv.app/) emotes directly inside your Obsidian notes. Type `:`
 2. Search for a streamer in the dropdown, **or** paste in their **numeric Twitch ID** manually.
    - This is the numeric user ID, **not** their Twitch username.
    - You can look it up with any "Twitch username to ID" converter online.
-3. That's it — start typing `:` in any note to use their emotes.
+1. That's it — start typing `:` in any note to use their emotes.
 
 ### 2. About the cache folder
 The plugin creates a `_7tv-emotes-cache/` folder in your vault automatically. This folder:
@@ -53,9 +49,10 @@ You can safely commit this folder to a synced/shared vault.
 ### Example
 
 ```markdown
-I can't wait to use emotes in Obsidian! :pog:
+I can't wait to use emotes in Obsidian! :batJam:
 ```
 
+I can't wait to use emotes in Obsidian! <picture class="seven-tv-emote"><source srcset="app://9f3827291073f9eebb190441d254a732a5a9/Users/treybrown/Documents/7tv-test-vault/_7tv-emotes-cache/01FGYFTSB0000DR9KT6H0R2B7W.webp?1778709084292" type="image/webp"><source srcset="https://cdn.7tv.app/emote/01FGYFTSB0000DR9KT6H0R2B7W/1x.webp" type="image/webp"><img class="seven-tv-inline-emote" loading="lazy" decoding="async" src="https://cdn.7tv.app/emote/01FGYFTSB0000DR9KT6H0R2B7W/1x.webp" alt=":batJAM:" title=":batJAM:"></picture>
 ## ❓ FAQ / Troubleshooting
 
 **The popup isn't appearing when I type `:`**
@@ -69,6 +66,9 @@ The settings field expects a **numeric** Twitch user ID, not a username. Use any
 
 **Can I use multiple streamers' emote sets at once?**
 Currently the plugin loads one streamer's set at a time. Multi-set support may come in a future release.
+
+**Any other issues?**
+Let me know so I can fix them. <picture class="seven-tv-emote"><source srcset="app://9f3827291073f9eebb190441d254a732a5a9/Users/treybrown/Documents/7tv-test-vault/_7tv-emotes-cache/01HMBMJPV0000D32KQCYBK4S1D.webp?1778709199149" type="image/webp"><source srcset="https://cdn.7tv.app/emote/01HMBMJPV0000D32KQCYBK4S1D/1x.webp" type="image/webp"><img class="seven-tv-inline-emote" loading="lazy" decoding="async" src="https://cdn.7tv.app/emote/01HMBMJPV0000D32KQCYBK4S1D/1x.webp" alt=":aga:" title=":aga:"></picture>
 
 ## 🤝 Contributing
 
